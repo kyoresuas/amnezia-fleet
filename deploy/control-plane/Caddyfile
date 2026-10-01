@@ -1,0 +1,8 @@
+{$FLEET_API_DOMAIN}:{$FLEET_API_PORT} {
+	encode zstd gzip
+	reverse_proxy fleetd:8080 {
+		transport http {
+			read_timeout 90s
+		}
+	}
+}

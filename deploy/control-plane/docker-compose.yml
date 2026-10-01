@@ -1,0 +1,76 @@
+name: amnezia-fleet
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fleet
+      POSTGRES_USER: fleet
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?задайте POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fleet -d fleet"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:25.8-alpine
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: fleet
+      CLICKHOUSE_USER: fleet
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?задайте CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "0"
+    volumes:
+      - clickhouse:/var/lib/clickhouse
+      - ./clickhouse-lowmem.xml:/etc/clickhouse-server/config.d/lowmem.xml:ro
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8123/ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  fleetd:
+    build:
+      context: ../..
+    image: amnezia-fleet/fleetd:local
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      clickhouse: { condition: service_healthy }
+    environment:
+      FLEET_LISTEN: ":8080"
+      FLEET_DATABASE_URL: postgres://fleet:${POSTGRES_PASSWORD}@postgres:5432/fleet?sslmode=disable
+      FLEET_CLICKHOUSE_URL: http://fleet:${CLICKHOUSE_PASSWORD}@clickhouse:8123/fleet
+      FLEET_MASTER_KEY: ${FLEET_MASTER_KEY:?задайте FLEET_MASTER_KEY}
+      FLEET_ADMIN_TOKEN: ${FLEET_ADMIN_TOKEN:?задайте FLEET_ADMIN_TOKEN}
+      FLEET_DNS_PROVIDER: ${FLEET_DNS_PROVIDER:-none}
+      FLEET_CLOUDFLARE_API_TOKEN: ${FLEET_CLOUDFLARE_API_TOKEN:-}
+      FLEET_CLOUDFLARE_ZONE_ID: ${FLEET_CLOUDFLARE_ZONE_ID:-}
+      FLEET_AUTO_BLOCK: ${FLEET_AUTO_BLOCK:-true}
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on: [fleetd]
+    environment:
+      FLEET_API_DOMAIN: ${FLEET_API_DOMAIN:?задайте FLEET_API_DOMAIN}
+      FLEET_API_PORT: ${FLEET_API_PORT:-443}
+    ports:
+      - "${FLEET_API_PORT:-443}:${FLEET_API_PORT:-443}"
+      - "80:80"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+
+volumes:
+  postgres:
+  clickhouse:
+  caddy:

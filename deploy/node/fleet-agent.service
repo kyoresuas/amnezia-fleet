@@ -1,0 +1,26 @@
+[Unit]
+Description=amnezia-fleet node agent
+Documentation=https://github.com/kyoresuas/amnezia-fleet
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/fleet-agent.env
+ExecStartPre=/sbin/modprobe amneziawg
+ExecStart=/usr/local/bin/fleet-agent
+Restart=always
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW CAP_SYS_MODULE
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/fleet-agent /proc/sys/net /run
+StateDirectory=fleet-agent
+StateDirectoryMode=0700
+PrivateTmp=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
