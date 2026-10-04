@@ -1,0 +1,892 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>fleet</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='4' fill='%23111'/%3E%3C/svg%3E">
+<style>
+@font-face { font-family: "Onest"; src: url("fonts/onest-cyrillic-wght-normal.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; src: url("fonts/onest-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "JB"; src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 800; }
+
+:root {
+  --paper: #ffffff;
+  --ink: #111110;
+  --ink-2: #3d3d3a;
+  --muted: #8f8f89;
+  --faint: #c9c9c4;
+  --line: #ececea;
+  --soft: #f7f7f5;
+  --ok: #17a34a;
+  --bad: #e5484d;
+  --warn: #d97706;
+  --sans: "Onest", ui-sans-serif, sans-serif;
+  --mono: "JB", ui-monospace, monospace;
+  --r: 10px;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+body { font: 400 14px/1.5 var(--sans); -webkit-font-smoothing: antialiased; font-feature-settings: "ss01"; }
+a { color: inherit; text-decoration: none; }
+button, input, select { font: inherit; color: inherit; }
+::selection { background: var(--ink); color: var(--paper); }
+
+.mono, .num { font-family: var(--mono); font-feature-settings: "zero"; }
+.num { font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+.muted { color: var(--muted); }
+.label { font-size: 11px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+
+/* каркас */
+header.top { position: sticky; top: 0; z-index: 10; background: rgba(255,255,255,.88); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid var(--line); }
+.bar { max-width: 1200px; margin: 0 auto; padding: 0 32px; height: 60px; display: flex; align-items: center; gap: 36px; }
+.mark { display: flex; align-items: center; gap: 10px; font-family: var(--mono); font-weight: 600; font-size: 15px; letter-spacing: -0.03em; }
+.mark i { width: 9px; height: 9px; border-radius: 50%; background: var(--faint); box-shadow: 0 0 0 4px rgba(0,0,0,.04); transition: background .4s; }
+.mark i.ok { background: var(--ok); box-shadow: 0 0 0 4px rgba(23,163,74,.12); }
+.mark i.bad { background: var(--bad); box-shadow: 0 0 0 4px rgba(229,72,77,.14); animation: pulse 1.6s infinite; }
+@keyframes pulse { 50% { box-shadow: 0 0 0 8px rgba(229,72,77,0); } }
+nav.tabs { display: flex; gap: 4px; }
+nav.tabs a { padding: 7px 12px; border-radius: 8px; color: var(--muted); font-weight: 500; transition: color .15s, background .15s; }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a.on { color: var(--ink); background: var(--soft); }
+.bar .right { margin-left: auto; display: flex; align-items: center; gap: 18px; color: var(--muted); font-size: 13px; }
+main { max-width: 1200px; margin: 0 auto; padding: 44px 32px 120px; }
+
+h1 { font-size: 40px; line-height: 1.05; font-weight: 500; letter-spacing: -0.035em; margin: 0; }
+h2 { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; margin: 0; }
+.head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 36px; }
+.head .sub { margin-top: 10px; color: var(--muted); }
+section { margin-top: 48px; }
+section > .sh { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 12px; border-bottom: 1px solid var(--ink); margin-bottom: 4px; }
+
+/* появление */
+.rise > * { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.rise > *:nth-child(2) { animation-delay: .05s; } .rise > *:nth-child(3) { animation-delay: .1s; }
+.rise > *:nth-child(4) { animation-delay: .15s; } .rise > *:nth-child(5) { animation-delay: .2s; }
+.rise > *:nth-child(n+6) { animation-delay: .25s; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+
+/* кнопки и поля */
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); font-weight: 500; cursor: pointer; transition: transform .1s, opacity .15s; white-space: nowrap; }
+.btn:hover { opacity: .86; } .btn:active { transform: scale(.98); }
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.btn.ghost:hover { border-color: var(--ink); opacity: 1; }
+.btn.danger { background: transparent; color: var(--bad); border-color: transparent; }
+.btn.danger:hover { border-color: var(--bad); }
+.btn.sm { height: 28px; padding: 0 11px; font-size: 13px; }
+.btn:disabled { opacity: .35; cursor: default; }
+.link { cursor: pointer; color: var(--muted); border: 0; background: none; padding: 0; font-size: 13px; }
+.link:hover { color: var(--ink); }
+.link.bad:hover { color: var(--bad); }
+input.f, select.f { height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--paper); outline: none; transition: border-color .15s, box-shadow .15s; min-width: 0; }
+input.f:focus, select.f:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(17,17,16,.06); }
+.form { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; padding: 20px; background: var(--soft); border-radius: var(--r); margin-bottom: 24px; }
+.form label { display: flex; flex-direction: column; gap: 6px; }
+.form label span { font-size: 12px; color: var(--muted); }
+
+/* таблицы */
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); padding: 12px 12px 10px 0; border-bottom: 1px solid var(--line); }
+td { padding: 15px 12px 15px 0; border-bottom: 1px solid var(--line); vertical-align: middle; }
+tr.go { cursor: pointer; transition: background .12s; }
+tr.go:hover td { background: var(--soft); }
+td.r, th.r { text-align: right; }
+.empty { padding: 40px 0; color: var(--muted); text-align: center; }
+
+.dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); vertical-align: middle; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); } .dot.warn { background: var(--warn); }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--soft); color: var(--ink-2); white-space: nowrap; }
+.pill.bad { background: #fdecec; color: #b42328; } .pill.ok { background: #e9f7ee; color: #12783a; } .pill.warn { background: #fdf2e3; color: #9a5205; }
+.share { height: 2px; background: var(--line); position: relative; margin-top: 8px; width: 140px; }
+.share b { position: absolute; inset: 0 auto 0 0; background: var(--ink); }
+
+/* обзор */
+.stats { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--ink); }
+.stat { padding: 22px 24px 26px 0; border-right: 1px solid var(--line); }
+.stat + .stat { padding-left: 24px; }
+.stat:last-child { border-right: 0; }
+.stat .v { font-family: var(--mono); font-size: 34px; letter-spacing: -0.05em; margin-top: 14px; font-variant-numeric: tabular-nums; }
+.stat .v small { font-size: 15px; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+.alerts { border: 1px solid #f6caca; border-radius: var(--r); overflow: hidden; margin-bottom: 40px; }
+.alert { display: flex; gap: 14px; align-items: baseline; padding: 14px 18px; border-top: 1px solid #fbe3e3; background: #fffafa; }
+.alert:first-child { border-top: 0; }
+.alert .what { font-weight: 500; }
+.alert .why { color: var(--muted); font-size: 13px; }
+.allok { display: flex; align-items: center; gap: 10px; color: var(--muted); margin-bottom: 40px; }
+.cols { display: grid; grid-template-columns: 1.3fr 1fr; gap: 48px; }
+
+/* события */
+.ev { display: grid; grid-template-columns: 120px 150px 1fr; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ev .k { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.ev.bad .k { color: var(--bad); }
+
+/* серверы */
+.cluster { margin-top: 40px; }
+.cluster .meta { display: flex; gap: 28px; flex-wrap: wrap; margin: 14px 0 22px; font-size: 13px; }
+.cluster .meta div span { display: block; }
+.node { display: grid; grid-template-columns: 210px 1fr auto; gap: 24px; padding: 20px 0; border-top: 1px solid var(--line); align-items: start; }
+.node .nm { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 9px; }
+.node .st { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.node .err { color: var(--bad); font-size: 12px; margin-top: 6px; font-family: var(--mono); word-break: break-word; }
+.addrs { display: flex; flex-direction: column; gap: 8px; }
+.addr { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+.addr .ip { font-family: var(--mono); width: 150px; }
+.addr select { height: 26px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--paper); font-size: 12px; }
+.addr .pub { font-size: 11px; color: var(--ok); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+.node .acts { display: flex; gap: 14px; align-items: center; justify-content: flex-end; }
+.cmd { margin-top: 14px; padding: 14px 16px; background: var(--ink); color: #e8e8e4; border-radius: 8px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; word-break: break-all; position: relative; }
+.cmd button { position: absolute; top: 10px; right: 10px; background: #2a2a28; color: #e8e8e4; border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+
+/* пользователь */
+.kv { display: flex; gap: 36px; flex-wrap: wrap; }
+.kv > div { min-width: 120px; }
+.kv .v { margin-top: 6px; font-size: 15px; }
+.dev { display: grid; grid-template-columns: 1fr 150px 230px auto; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.dev .n { font-weight: 500; }
+.dev .n.off { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.chart { margin-top: 14px; }
+.chart svg { display: block; width: 100%; height: 160px; overflow: visible; }
+.chart .legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 10px; }
+.chart .legend i { display: inline-block; width: 10px; height: 2px; vertical-align: middle; margin-right: 6px; }
+.dest { display: grid; grid-template-columns: 1fr 110px; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.dest .d { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dest .bar2 { grid-column: 1 / -1; height: 2px; background: var(--line); }
+.dest .bar2 b { display: block; height: 100%; background: var(--ink); }
+.dns { font-family: var(--mono); font-size: 12px; display: grid; grid-template-columns: 70px 1fr 50px; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--line); }
+.dns .t { color: var(--muted); }
+.seg { display: inline-flex; background: var(--soft); border-radius: 8px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.seg button.on { background: var(--paper); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+
+/* окно ключа */
+.veil { position: fixed; inset: 0; background: rgba(17,17,16,.32); backdrop-filter: blur(3px); display: grid; place-items: center; z-index: 50; animation: fade .2s both; }
+@keyframes fade { from { opacity: 0; } }
+.sheet { background: var(--paper); border-radius: 16px; width: min(560px, calc(100vw - 32px)); padding: 32px; box-shadow: 0 30px 80px rgba(0,0,0,.18); animation: rise .3s cubic-bezier(.2,.7,.2,1) both; max-height: calc(100vh - 40px); overflow: auto; }
+.sheet h2 { font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
+.qr { display: grid; place-items: center; padding: 18px; border: 1px solid var(--line); border-radius: 12px; margin: 22px 0 18px; min-height: 120px; }
+.qr img { width: 100%; max-width: 300px; image-rendering: pixelated; }
+.uri { font-family: var(--mono); font-size: 11.5px; background: var(--soft); border-radius: 8px; padding: 12px 14px; word-break: break-all; max-height: 92px; overflow: auto; color: var(--ink-2); }
+.sheet .row { display: flex; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+
+/* вход */
+.login { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+.login form { width: 360px; max-width: 100%; }
+.login h1 { font-family: var(--mono); font-size: 28px; letter-spacing: -0.05em; display: flex; align-items: center; gap: 12px; }
+.login h1 i { width: 12px; height: 12px; border-radius: 50%; background: var(--ink); }
+.login p { color: var(--muted); margin: 12px 0 28px; }
+.login input { width: 100%; margin-bottom: 12px; font-family: var(--mono); font-size: 13px; }
+.login .btn { width: 100%; justify-content: center; height: 40px; }
+
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: var(--paper); padding: 11px 18px; border-radius: 999px; font-size: 13px; z-index: 60; animation: rise .25s both; max-width: calc(100vw - 32px); }
+.toast.bad { background: var(--bad); }
+
+@media (max-width: 860px) {
+  .bar { padding: 0 16px; gap: 16px; } main { padding: 28px 16px 80px; }
+  .bar .right .dom { display: none; }
+  .stats { grid-template-columns: 1fr 1fr; } .stat:nth-child(2) { border-right: 0; } .stat:nth-child(3) { padding-left: 0; }
+  .cols { grid-template-columns: 1fr; }
+  .node { grid-template-columns: 1fr; } .node .acts { justify-content: flex-start; }
+  .dev { grid-template-columns: 1fr auto; } .dev .hide { display: none; }
+  .ev { grid-template-columns: 90px 1fr; } .ev .k { display: none; }
+  h1 { font-size: 30px; }
+  table .hide { display: none; }
+}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+"use strict";
+const TOKEN_KEY = "fleet.token";
+const $app = document.getElementById("app");
+const state = { meta: null, clusters: [], token: null, timer: null };
+
+// хранилище токена может быть недоступно в приватном режиме
+function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch { return state.token; } }
+function setToken(t) { state.token = t; try { t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY); } catch {} }
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+async function api(path, opts = {}) {
+  const res = await fetch("/api/v1" + path, {
+    ...opts,
+    headers: { "Authorization": "Bearer " + getToken(), ...(opts.body ? { "Content-Type": "application/json" } : {}) },
+    body: opts.body ? JSON.stringify(opts.body) : undefined,
+  });
+  if (res.status === 401) { setToken(null); renderLogin("Токен не подошёл"); throw new Error("unauthorized"); }
+  if (res.status === 204) return null;
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("json") ? await res.json() : await res.blob();
+  if (!res.ok) throw new Error((data && data.error) || ("ошибка " + res.status));
+  return data;
+}
+
+function toast(msg, bad) {
+  document.querySelectorAll(".toast").forEach(t => t.remove());
+  const el = document.createElement("div");
+  el.className = "toast" + (bad ? " bad" : "");
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3200);
+}
+
+async function run(fn, ok) {
+  try { const r = await fn(); if (ok) toast(ok); return r; }
+  catch (e) { if (e.message !== "unauthorized") toast(e.message, true); throw e; }
+}
+
+function bytes(n) {
+  n = Number(n) || 0;
+  const u = ["Б", "КБ", "МБ", "ГБ", "ТБ"];
+  let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n < 10 ? n.toFixed(1) : Math.round(n)) + " " + u[i];
+}
+function splitBytes(n) { const s = bytes(n).split(" "); return { v: s[0], u: s[1] }; }
+
+function ago(ts) {
+  if (!ts) return "никогда";
+  const s = Math.max(0, (Date.now() - new Date(ts).getTime()) / 1000);
+  if (s < 45) return "только что";
+  if (s < 3600) return Math.round(s / 60) + " мин назад";
+  if (s < 86400) return Math.round(s / 3600) + " ч назад";
+  return Math.round(s / 86400) + " д назад";
+}
+function dateRu(ts) { return ts ? new Date(ts).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "—"; }
+function timeRu(ts) { return new Date(ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
+
+function nodeAlive(n) {
+  const stale = (state.meta?.node_stale_after_seconds || 90) * 1000;
+  return n.last_seen_at && Date.now() - new Date(n.last_seen_at).getTime() < stale;
+}
+
+async function copy(text) {
+  try { await navigator.clipboard.writeText(text); toast("Скопировано"); }
+  catch { toast("Не удалось скопировать", true); }
+}
+
+// маршрутизация по hash
+const routes = [
+  [/^#?\/?$/, viewOverview],
+  [/^#\/users$/, viewUsers],
+  [/^#\/users\/([\w-]+)$/, viewUser],
+  [/^#\/servers$/, viewServers],
+  [/^#\/events$/, viewEvents],
+];
+
+function shell(active) {
+  if (document.querySelector("header.top")) {
+    document.querySelectorAll("nav.tabs a").forEach(a => a.classList.toggle("on", a.dataset.k === active));
+    return document.querySelector("main");
+  }
+  $app.innerHTML = `
+    <header class="top"><div class="bar">
+      <a class="mark" href="#/"><i id="health"></i>fleet</a>
+      <nav class="tabs">
+        <a data-k="overview" href="#/">Обзор</a>
+        <a data-k="users" href="#/users">Пользователи</a>
+        <a data-k="servers" href="#/servers">Серверы</a>
+        <a data-k="events" href="#/events">События</a>
+      </nav>
+      <div class="right"><span class="dom mono">${esc(location.host)}</span><button class="link" id="logout">Выйти</button></div>
+    </div></header>
+    <main></main>`;
+  document.getElementById("logout").onclick = () => { setToken(null); renderLogin(); };
+  return shell(active);
+}
+
+async function route() {
+  clearInterval(state.timer);
+  if (!getToken()) return renderLogin();
+  const h = location.hash || "#/";
+  for (const [re, fn] of routes) {
+    const m = h.match(re);
+    if (m) { try { await fn(...m.slice(1)); } catch (e) { if (e.message !== "unauthorized") toast(e.message, true); } return; }
+  }
+  location.hash = "#/";
+}
+window.addEventListener("hashchange", route);
+
+function renderLogin(msg) {
+  clearInterval(state.timer);
+  $app.innerHTML = `
+    <div class="login"><form id="lf" class="rise">
+      <h1><i></i>fleet</h1>
+      <p>${esc(msg || "Вход по токену администратора из /etc/fleetd/fleetd.env")}</p>
+      <input class="f" id="tk" type="password" placeholder="FLEET_ADMIN_TOKEN" autocomplete="off" autofocus>
+      <button class="btn">Войти</button>
+    </form></div>`;
+  document.getElementById("lf").onsubmit = async e => {
+    e.preventDefault();
+    setToken(document.getElementById("tk").value.trim());
+    try { await loadMeta(true); route(); } catch {}
+  };
+}
+
+async function loadMeta(force) {
+  if (!state.meta || force) state.meta = await api("/meta");
+  state.clusters = await api("/clusters");
+}
+
+// сводка о проблемах по всем кластерам
+async function collectHealth() {
+  const [nodesByCluster, probes] = await Promise.all([
+    Promise.all(state.clusters.map(c => api(`/clusters/${c.id}/nodes`).then(nodes => ({ c, nodes })))),
+    api("/probes"),
+  ]);
+  const alerts = [];
+  let alive = 0, total = 0;
+  for (const { c, nodes } of nodesByCluster) {
+    for (const n of nodes) {
+      if (n.state === "disabled") continue;
+      total++;
+      if (nodeAlive(n)) alive++;
+      else alerts.push({ what: `Сервер ${n.name} не отвечает`, why: n.last_seen_at ? `последний отчёт ${ago(n.last_seen_at)}` : "агент ни разу не выходил на связь", href: "#/servers" });
+      if (n.last_error) alerts.push({ what: `Ошибка агента на ${n.name}`, why: n.last_error, href: "#/servers" });
+      if (nodeAlive(n) && n.applied_revision < c.revision) alerts.push({ what: `${n.name} отстаёт от конфигурации`, why: `применена ревизия ${n.applied_revision} из ${c.revision}`, href: "#/servers" });
+      for (const a of n.addresses || []) {
+        if (a.state === "blocked") alerts.push({ what: `Адрес ${a.ip} заблокирован`, why: `${n.name}${a.health === "up" ? ", но снова доступен, можно вернуть" : ""}`, href: "#/servers" });
+        else if (a.health === "down" && a.state !== "disabled") alerts.push({ what: `Адрес ${a.ip} недоступен`, why: `${n.name}, пробы не проходят`, href: "#/servers" });
+      }
+    }
+  }
+  const probeStale = (state.meta?.probe_interval_seconds || 30) * 4 * 1000;
+  if (!probes.length) alerts.push({ what: "Нет ни одной пробы", why: "блокировки не определяются автоматически", href: "#/servers" });
+  for (const p of probes) {
+    if (!p.last_seen_at || Date.now() - new Date(p.last_seen_at).getTime() > probeStale)
+      alerts.push({ what: `Проба ${p.name} молчит`, why: `последний раз ${ago(p.last_seen_at)}`, href: "#/servers" });
+  }
+  const dot = document.getElementById("health");
+  if (dot) dot.className = alerts.length ? "bad" : "ok";
+  return { alerts, alive, total, nodesByCluster, probes };
+}
+
+async function onlinePeers() {
+  const lists = await Promise.all(state.clusters.map(c => api(`/clusters/${c.id}/online`)));
+  const m = new Map();
+  lists.flat().forEach(o => m.set(o.peer_id, o));
+  return m;
+}
+
+// обзор
+async function viewOverview() {
+  const main = shell("overview");
+  await loadMeta();
+  const draw = async () => {
+    const [h, usage, users, online, events] = await Promise.all([
+      collectHealth(),
+      state.meta.telemetry ? api("/stats/usage") : Promise.resolve({ peers: [] }),
+      api("/users"),
+      onlinePeers(),
+      api("/events?limit=8"),
+    ]);
+    const total = usage.peers.reduce((s, p) => s + p.total, 0);
+    const byUser = new Map();
+    for (const p of usage.peers) {
+      if (!p.user_id) continue;
+      byUser.set(p.user_id, (byUser.get(p.user_id) || 0) + p.total);
+    }
+    const top = [...byUser.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+    const uname = new Map(users.map(u => [u.id, u.name]));
+    const t = splitBytes(total);
+    main.innerHTML = `
+      <div class="rise">
+        <div class="head"><div><h1>Обзор</h1><div class="sub">${new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</div></div></div>
+        ${h.alerts.length ? `<div class="alerts">${h.alerts.map(a => `
+          <a class="alert" href="${a.href}"><span class="dot bad"></span><span class="what">${esc(a.what)}</span><span class="why">${esc(a.why)}</span></a>`).join("")}</div>`
+          : `<div class="allok"><span class="dot ok"></span>Всё работает</div>`}
+        <div class="stats">
+          <div class="stat"><div class="label">Онлайн сейчас</div><div class="v">${online.size}</div></div>
+          <div class="stat"><div class="label">Трафик за месяц</div><div class="v">${t.v}<small>${t.u}</small></div></div>
+          <div class="stat"><div class="label">Пользователи</div><div class="v">${users.filter(u => u.status === "active").length}<small>/ ${users.length}</small></div></div>
+          <div class="stat"><div class="label">Серверы живы</div><div class="v">${h.alive}<small>/ ${h.total}</small></div></div>
+        </div>
+        <div class="cols">
+          <section>
+            <div class="sh"><h2>Больше всех тратят</h2><a class="link" href="#/users">Все</a></div>
+            ${top.length ? top.map(([id, v]) => `
+              <div class="dest" style="cursor:pointer" onclick="location.hash='#/users/${id}'">
+                <span class="d">${esc(uname.get(id) || "удалён")}</span><span class="num r" style="text-align:right">${bytes(v)}</span>
+                <span class="bar2"><b style="width:${total ? (v / top[0][1] * 100).toFixed(1) : 0}%"></b></span>
+              </div>`).join("") : `<div class="empty">Трафика пока нет</div>`}
+          </section>
+          <section>
+            <div class="sh"><h2>События</h2><a class="link" href="#/events">Все</a></div>
+            ${events.map(evRow).join("") || `<div class="empty">Пусто</div>`}
+          </section>
+        </div>
+      </div>`;
+  };
+  await draw();
+  state.timer = setInterval(() => draw().catch(() => {}), 15000);
+}
+
+function evRow(e) {
+  const bad = /blocked|error|no_candidates|limit/.test(e.kind);
+  return `<div class="ev ${bad ? "bad" : ""}"><span class="muted">${ago(e.created_at)}</span><span class="k">${esc(e.kind)}</span><span>${esc(e.message)}</span></div>`;
+}
+
+// пользователи
+async function viewUsers() {
+  const main = shell("users");
+  await loadMeta();
+  const [users, peers, usage, online] = await Promise.all([
+    api("/users"), api("/peers"),
+    state.meta.telemetry ? api("/stats/usage") : Promise.resolve({ peers: [] }),
+    onlinePeers(),
+  ]);
+  const devs = new Map(), on = new Map(), traffic = new Map();
+  for (const p of peers) {
+    devs.set(p.user_id, (devs.get(p.user_id) || 0) + 1);
+    if (online.has(p.id)) on.set(p.user_id, (on.get(p.user_id) || 0) + 1);
+  }
+  for (const u of usage.peers) {
+    if (!u.user_id) continue;
+    const t = traffic.get(u.user_id) || { rx: 0, tx: 0 };
+    t.rx += u.rx; t.tx += u.tx; traffic.set(u.user_id, t);
+  }
+  const max = Math.max(1, ...[...traffic.values()].map(t => t.rx + t.tx));
+  const list = users.slice().sort((a, b) => {
+    const ta = traffic.get(a.id), tb = traffic.get(b.id);
+    return ((tb?.rx || 0) + (tb?.tx || 0)) - ((ta?.rx || 0) + (ta?.tx || 0)) || a.name.localeCompare(b.name);
+  });
+  const row = u => {
+    const t = traffic.get(u.id) || { rx: 0, tx: 0 };
+    const used = t.rx + t.tx;
+    const lim = u.traffic_limit_bytes;
+    return `<tr class="go" data-name="${esc(u.name.toLowerCase())}" onclick="location.hash='#/users/${u.id}'">
+      <td><div style="display:flex;align-items:center;gap:10px"><span class="dot ${on.get(u.id) ? "ok" : ""}"></span><b style="font-weight:500">${esc(u.name)}</b></div>
+        ${u.note ? `<div class="muted" style="font-size:12px;margin:2px 0 0 17px">${esc(u.note)}</div>` : ""}</td>
+      <td>${u.status === "active" ? (u.expires_at && new Date(u.expires_at) < new Date() ? `<span class="pill warn">истёк</span>` : `<span class="pill">активен</span>`) : `<span class="pill bad">приостановлен</span>`}</td>
+      <td class="num">${devs.get(u.id) || 0}${on.get(u.id) ? ` <span class="muted">· ${on.get(u.id)} онлайн</span>` : ""}</td>
+      <td class="r"><div class="num">${bytes(used)}</div><div class="share" style="margin-left:auto"><b style="width:${(used / max * 100).toFixed(1)}%"></b></div></td>
+      <td class="r num hide">${lim ? `${Math.min(100, Math.round(used / lim * 100))}% из ${bytes(lim)}` : `<span class="muted">—</span>`}</td>
+      <td class="r hide muted">${u.expires_at ? dateRu(u.expires_at) : "—"}</td>
+    </tr>`;
+  };
+  main.innerHTML = `
+    <div class="rise">
+      <div class="head"><div><h1>Пользователи</h1><div class="sub">Трафик с начала месяца</div></div>
+        <div style="display:flex;gap:10px"><input class="f" id="q" placeholder="Поиск" style="width:200px"><button class="btn" id="add">Новый пользователь</button></div></div>
+      <div id="form"></div>
+      <table><thead><tr><th>Имя</th><th>Статус</th><th>Устройства</th><th class="r">Трафик</th><th class="r hide">Лимит</th><th class="r hide">Срок</th></tr></thead>
+      <tbody id="rows">${list.map(row).join("") || `<tr><td colspan="6" class="empty">Пользователей пока нет</td></tr>`}</tbody></table>
+    </div>`;
+  document.getElementById("q").oninput = e => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll("#rows tr[data-name]").forEach(tr => tr.style.display = tr.dataset.name.includes(q) ? "" : "none");
+  };
+  document.getElementById("add").onclick = () => {
+    const f = document.getElementById("form");
+    if (f.innerHTML) { f.innerHTML = ""; return; }
+    f.innerHTML = `<form class="form" id="uf">
+      <label><span>Имя</span><input class="f" name="name" required autofocus></label>
+      <label><span>Заметка</span><input class="f" name="note"></label>
+      <label><span>Лимит, ГБ в месяц</span><input class="f" name="limit" type="number" min="1" style="width:150px" placeholder="без лимита"></label>
+      <label><span>Действует до</span><input class="f" name="exp" type="date"></label>
+      <button class="btn">Создать</button></form>`;
+    document.getElementById("uf").onsubmit = async e => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      const body = { name: d.get("name"), note: d.get("note") };
+      if (d.get("limit")) body.traffic_limit_bytes = Math.round(Number(d.get("limit")) * 1024 ** 3);
+      if (d.get("exp")) body.expires_at = new Date(d.get("exp") + "T23:59:59").toISOString();
+      const u = await run(() => api("/users", { method: "POST", body }), "Пользователь создан");
+      location.hash = "#/users/" + u.id;
+    };
+  };
+}
+
+// карточка пользователя
+async function viewUser(id) {
+  const main = shell("users");
+  await loadMeta();
+  const tele = state.meta.telemetry;
+  const from30 = new Date(Date.now() - 29 * 86400e3); from30.setHours(0, 0, 0, 0);
+  const [u, peers, online, series, dests, dns] = await Promise.all([
+    api(`/users/${id}`), api(`/users/${id}/peers`), onlinePeers(),
+    tele ? api(`/users/${id}/usage?step=86400&from=${from30.toISOString()}`) : [],
+    tele ? api(`/users/${id}/destinations?limit=20`) : [],
+    tele ? api(`/users/${id}/dns?limit=40`) : [],
+  ]);
+  const clusterName = new Map(state.clusters.map(c => [c.id, c.name]));
+  const month = series.filter(p => new Date(p.ts) >= new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const usedMonth = month.reduce((s, p) => s + p.rx + p.tx, 0);
+  const lim = u.traffic_limit_bytes;
+  const devRow = p => {
+    const o = online.get(p.id);
+    return `<div class="dev">
+      <div><div class="n ${p.enabled ? "" : "off"}">${esc(p.name)}</div><div class="muted" style="font-size:12px">${esc(clusterName.get(p.cluster_id) || "")}</div></div>
+      <div class="mono hide" style="font-size:13px">${esc(p.address_v4)}</div>
+      <div class="hide" style="font-size:13px">${o ? `<span class="dot ok"></span> онлайн <span class="muted">· ${ago(o.last_handshake)}</span>` : `<span class="dot"></span> <span class="muted">не подключён</span>`}</div>
+      <div style="display:flex;gap:14px;justify-content:flex-end;align-items:center">
+        <button class="btn sm" data-key="${p.id}">Ключ</button>
+        <button class="link" data-toggle="${p.id}" data-on="${p.enabled}">${p.enabled ? "Отключить" : "Включить"}</button>
+        <button class="link bad" data-del="${p.id}">Удалить</button>
+      </div></div>`;
+  };
+  const maxDest = Math.max(1, ...dests.map(d => d.bytes_up + d.bytes_down));
+  main.innerHTML = `
+    <div class="rise">
+      <div class="head">
+        <div><a class="link" href="#/users">← Пользователи</a><h1 style="margin-top:14px">${esc(u.name)}</h1>
+          <div class="sub">${u.status === "active" ? "Активен" : "Приостановлен"}${u.note ? " · " + esc(u.note) : ""}</div></div>
+        <div style="display:flex;gap:10px">
+          <button class="btn ghost" id="st">${u.status === "active" ? "Приостановить" : "Возобновить"}</button>
+          <button class="btn danger" id="del">Удалить</button>
+        </div>
+      </div>
+      <div class="kv">
+        <div><div class="label">За месяц</div><div class="v num">${bytes(usedMonth)}</div></div>
+        <div><div class="label">Лимит</div><div class="v num">${lim ? `${bytes(lim)} <span class="muted">· ${Math.min(100, Math.round(usedMonth / lim * 100))}%</span>` : "нет"}</div></div>
+        <div><div class="label">Действует до</div><div class="v">${u.expires_at ? dateRu(u.expires_at) : "бессрочно"}</div></div>
+        <div><div class="label">Создан</div><div class="v">${dateRu(u.created_at)}</div></div>
+        <div style="margin-left:auto;align-self:flex-end"><button class="link" id="edit">Изменить лимит и срок</button></div>
+      </div>
+      <div id="eform" style="margin-top:20px"></div>
+
+      <section>
+        <div class="sh"><h2>Устройства</h2><button class="btn sm" id="newdev">Новое устройство</button></div>
+        <div id="dform"></div>
+        ${peers.map(devRow).join("") || `<div class="empty">Устройств нет, создайте ключ</div>`}
+      </section>
+
+      ${tele ? `
+      <section>
+        <div class="sh"><h2>Трафик за 30 дней</h2><span class="muted num" style="font-size:13px">${bytes(series.reduce((s, p) => s + p.rx + p.tx, 0))}</span></div>
+        <div class="chart">${chart(series, from30)}
+          <div class="legend"><span><i style="background:var(--ink)"></i>к пользователю</span><span><i style="background:var(--faint)"></i>от пользователя</span></div></div>
+      </section>
+      <div class="cols">
+        <section>
+          <div class="sh"><h2>Куда уходит трафик</h2><div class="seg" id="seg"><button class="on" data-by="domain">Домены</button><button data-by="ip">IP</button></div></div>
+          <div id="dests">${destRows(dests, maxDest)}</div>
+        </section>
+        <section>
+          <div class="sh"><h2>DNS-запросы</h2><span class="muted" style="font-size:13px">последние ${dns.length}</span></div>
+          ${dns.map(q => `<div class="dns"><span class="t">${timeRu(q.at)}</span><span>${esc(q.name)}</span><span class="t">${esc(q.type)}</span></div>`).join("") || `<div class="empty">Запросов нет</div>`}
+        </section>
+      </div>` : `<section><div class="empty">Учёт трафика выключен: не настроен ClickHouse</div></section>`}
+    </div>`;
+
+  document.getElementById("st").onclick = async () => {
+    await run(() => api(`/users/${id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active" } }), "Готово");
+    viewUser(id);
+  };
+  confirmBtn(document.getElementById("del"), "Точно удалить?", async () => {
+    await run(() => api(`/users/${id}`, { method: "DELETE" }), "Пользователь удалён");
+    location.hash = "#/users";
+  });
+  document.getElementById("edit").onclick = () => {
+    const f = document.getElementById("eform");
+    if (f.innerHTML) { f.innerHTML = ""; return; }
+    f.innerHTML = `<form class="form" id="ef">
+      <label><span>Лимит, ГБ в месяц</span><input class="f" name="limit" type="number" min="1" style="width:160px" value="${lim ? +(lim / 1024 ** 3).toFixed(2) : ""}" placeholder="без лимита"></label>
+      <label><span>Действует до</span><input class="f" name="exp" type="date" value="${u.expires_at ? u.expires_at.slice(0, 10) : ""}"></label>
+      <label><span>Заметка</span><input class="f" name="note" value="${esc(u.note || "")}"></label>
+      <button class="btn">Сохранить</button></form>`;
+    document.getElementById("ef").onsubmit = async e => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      await run(() => api(`/users/${id}`, { method: "PATCH", body: {
+        traffic_limit_bytes: d.get("limit") ? Math.round(Number(d.get("limit")) * 1024 ** 3) : null,
+        expires_at: d.get("exp") ? new Date(d.get("exp") + "T23:59:59").toISOString() : null,
+        note: d.get("note"),
+      } }), "Сохранено");
+      viewUser(id);
+    };
+  };
+  document.getElementById("newdev").onclick = () => {
+    const f = document.getElementById("dform");
+    if (f.innerHTML) { f.innerHTML = ""; return; }
+    if (!state.clusters.length) { toast("Сначала создайте кластер на странице «Серверы»", true); return; }
+    f.innerHTML = `<form class="form" id="df" style="margin-top:16px">
+      <label><span>Название устройства</span><input class="f" name="name" placeholder="iPhone, ноутбук" required autofocus></label>
+      ${state.clusters.length > 1 ? `<label><span>Кластер</span><select class="f" name="cluster">${state.clusters.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></label>` : ""}
+      <button class="btn">Создать ключ</button></form>`;
+    document.getElementById("df").onsubmit = async e => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      const p = await run(() => api(`/users/${id}/peers`, { method: "POST", body: { name: d.get("name"), cluster_id: d.get("cluster") || state.clusters[0].id } }), "Ключ создан");
+      await viewUser(id);
+      showKey(p);
+    };
+  };
+  main.querySelectorAll("[data-key]").forEach(b => b.onclick = () => showKey(peers.find(p => p.id === b.dataset.key)));
+  main.querySelectorAll("[data-toggle]").forEach(b => b.onclick = async () => {
+    await run(() => api(`/peers/${b.dataset.toggle}`, { method: "PATCH", body: { enabled: b.dataset.on !== "true" } }), "Готово");
+    viewUser(id);
+  });
+  main.querySelectorAll("[data-del]").forEach(b => confirmBtn(b, "Точно?", async () => {
+    await run(() => api(`/peers/${b.dataset.del}`, { method: "DELETE" }), "Устройство удалено");
+    viewUser(id);
+  }));
+  const seg = document.getElementById("seg");
+  if (seg) seg.querySelectorAll("button").forEach(b => b.onclick = async () => {
+    seg.querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    const list = await api(`/users/${id}/destinations?limit=20&by=${b.dataset.by}`);
+    document.getElementById("dests").innerHTML = destRows(list, Math.max(1, ...list.map(d => d.bytes_up + d.bytes_down)), b.dataset.by === "ip");
+  });
+}
+
+function destRows(list, max, byIP) {
+  if (!list.length) return `<div class="empty">Данных пока нет</div>`;
+  const proto = { 6: "tcp", 17: "udp", 1: "icmp" };
+  return list.map(d => {
+    const v = d.bytes_up + d.bytes_down;
+    const label = byIP ? `${d.dst_ip}:${d.dst_port} <span class="muted">${proto[d.proto] || d.proto}${d.domain ? " · " + esc(d.domain) : ""}</span>` : esc(d.domain);
+    return `<div class="dest"><span class="d ${byIP ? "mono" : ""}">${label}</span><span class="num" style="text-align:right">${bytes(v)}</span><span class="bar2"><b style="width:${(v / max * 100).toFixed(1)}%"></b></span></div>`;
+  }).join("");
+}
+
+// столбики по дням: снизу к пользователю, сверху от пользователя
+function chart(series, from) {
+  const days = [];
+  for (let i = 0; i < 30; i++) {
+    const d = new Date(from.getTime() + i * 86400e3);
+    days.push({ key: d.toISOString().slice(0, 10), d, rx: 0, tx: 0 });
+  }
+  const idx = new Map(days.map((d, i) => [d.key, i]));
+  for (const p of series) {
+    const k = new Date(p.ts).toISOString().slice(0, 10);
+    if (idx.has(k)) { days[idx.get(k)].rx += p.rx; days[idx.get(k)].tx += p.tx; }
+  }
+  const max = Math.max(1, ...days.map(d => d.rx + d.tx));
+  const W = 1000, H = 150, gap = 6, bw = W / 30 - gap;
+  const bars = days.map((d, i) => {
+    const x = i * (W / 30);
+    const hd = (d.tx / max) * H, hu = (d.rx / max) * H;
+    return `<g><title>${d.d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}: ↓ ${bytes(d.tx)}, ↑ ${bytes(d.rx)}</title>
+      <rect x="${x}" y="0" width="${bw + gap}" height="${H}" fill="transparent"/>
+      <rect x="${x}" y="${H - hd}" width="${bw}" height="${Math.max(hd, d.tx ? 1 : 0)}" fill="#111110"/>
+      <rect x="${x}" y="${H - hd - hu}" width="${bw}" height="${hu}" fill="#c9c9c4"/></g>`;
+  }).join("");
+  const labels = [0, 10, 20, 29].map(i => `<text x="${i * (W / 30)}" y="${H + 18}" font-size="11" fill="#8f8f89" font-family="JB, monospace">${days[i].d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" })}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H + 22}" preserveAspectRatio="none"><line x1="0" x2="${W}" y1="${H}" y2="${H}" stroke="#ececea"/>${bars}${labels}</svg>`;
+}
+
+// второе нажатие подтверждает действие, без системных диалогов
+function confirmBtn(btn, ask, fn) {
+  const text = btn.textContent;
+  let armed = false, t;
+  btn.onclick = async e => {
+    e.stopPropagation();
+    if (!armed) { armed = true; btn.textContent = ask; t = setTimeout(() => { armed = false; btn.textContent = text; }, 3000); return; }
+    clearTimeout(t);
+    btn.disabled = true;
+    try { await fn(); } finally { btn.disabled = false; }
+  };
+}
+
+async function showKey(p) {
+  const veil = document.createElement("div");
+  veil.className = "veil";
+  veil.innerHTML = `<div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:baseline"><h2>${esc(p.name)}</h2><button class="link" id="kx">Закрыть</button></div>
+    <div class="muted" style="margin-top:6px;font-size:13px">Откройте AmneziaVPN, нажмите «+» и отсканируйте код или вставьте ссылку</div>
+    <div class="qr" id="kq"><span class="muted">Загрузка…</span></div>
+    <div class="uri" id="ku">…</div>
+    <div class="row">
+      <button class="btn" id="kc">Скопировать ссылку</button>
+      <button class="btn ghost" id="kd">Скачать .conf</button>
+    </div></div>`;
+  document.body.appendChild(veil);
+  const close = () => veil.remove();
+  veil.onclick = e => { if (e.target === veil) close(); };
+  document.getElementById("kx").onclick = close;
+  document.addEventListener("keydown", function k(e) { if (e.key === "Escape") { close(); document.removeEventListener("keydown", k); } });
+  try {
+    const [{ url }, qr] = await Promise.all([api(`/peers/${p.id}/config?format=amnezia`), api(`/peers/${p.id}/qr`).catch(() => null)]);
+    document.getElementById("ku").textContent = url;
+    document.getElementById("kc").onclick = () => copy(url);
+    document.getElementById("kq").innerHTML = qr ? `<img alt="QR" src="${URL.createObjectURL(qr)}">` : `<span class="muted">Ссылка слишком длинная для QR, скопируйте её</span>`;
+  } catch (e) {
+    document.getElementById("kq").innerHTML = `<span class="muted">${esc(e.message)}</span>`;
+  }
+  document.getElementById("kd").onclick = async () => {
+    const blob = await run(() => api(`/peers/${p.id}/config?format=conf`));
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = (p.name || "fleet").replace(/[^\w.-]+/g, "_") + ".conf";
+    a.click();
+  };
+}
+
+// серверы
+async function viewServers() {
+  const main = shell("servers");
+  await loadMeta();
+  const draw = async () => {
+    const h = await collectHealth();
+    const [dnsStates, statuses] = await Promise.all([
+      Promise.all(state.clusters.map(c => api(`/clusters/${c.id}/dns`))),
+      api("/probes/status"),
+    ]);
+    const probeByAddr = new Map();
+    for (const s of statuses) { const l = probeByAddr.get(s.address_id) || []; l.push(s); probeByAddr.set(s.address_id, l); }
+    const keep = document.getElementById("snode")?.innerHTML || "";
+    main.innerHTML = `
+      <div class="rise">
+        <div class="head"><div><h1>Серверы</h1><div class="sub">${h.alive} из ${h.total} на связи</div></div>
+          ${state.clusters.length ? "" : `<button class="btn" id="nc">Создать кластер</button>`}</div>
+        <div id="cform"></div>
+        ${state.clusters.map((c, i) => clusterBlock(c, h.nodesByCluster[i].nodes, dnsStates[i], probeByAddr)).join("")}
+        <section>
+          <div class="sh"><h2>Пробы</h2><span class="muted" style="font-size:13px">проверяют адреса из сети пользователей</span></div>
+          ${h.probes.map(p => {
+            const fresh = p.last_seen_at && Date.now() - new Date(p.last_seen_at).getTime() < (state.meta.probe_interval_seconds || 30) * 4000;
+            return `<div class="dev" style="grid-template-columns:1fr 1fr auto"><div><span class="dot ${fresh ? "ok" : "bad"}"></span> <b style="font-weight:500">${esc(p.name)}</b> <span class="muted">${esc(p.region)}</span></div><div class="muted" style="font-size:13px">отчёт ${ago(p.last_seen_at)}</div><div></div></div>`;
+          }).join("") || `<div class="empty">Проб нет</div>`}
+        </section>
+      </div>`;
+    if (keep) { const s = document.getElementById("snode"); if (s) s.innerHTML = keep; }
+    bindServers();
+  };
+  state.redrawServers = draw;
+  await draw();
+  state.timer = setInterval(() => { if (!document.querySelector(".form, .cmd")) draw().catch(() => {}); }, 15000);
+}
+
+function clusterBlock(c, nodes, dns, probeByAddr) {
+  const published = new Set((dns.records || []).map(String));
+  const health = { up: ["ok", "доступен"], down: ["bad", "недоступен"], unknown: ["", "не проверен"] };
+  const nodeRow = n => {
+    const alive = nodeAlive(n);
+    const st = n.state === "disabled" ? `<span class="pill">выключен</span>` : n.state === "draining" ? `<span class="pill warn">выводится</span>` : "";
+    return `<div class="node">
+      <div>
+        <div class="nm"><span class="dot ${n.state === "disabled" ? "" : alive ? "ok" : "bad"}"></span>${esc(n.name)} ${st}</div>
+        <div class="st">${alive ? "на связи" : n.last_seen_at ? "молчит, отчёт " + ago(n.last_seen_at) : "агент не установлен"}${n.agent_version ? ` · <span class="mono">${esc(n.agent_version)}</span>` : ""}</div>
+        ${n.applied_revision && n.applied_revision < c.revision && alive ? `<div class="st">ревизия ${n.applied_revision} из ${c.revision}</div>` : ""}
+        ${n.last_error ? `<div class="err">${esc(n.last_error)}</div>` : ""}
+      </div>
+      <div class="addrs">
+        ${(n.addresses || []).map(a => {
+          const pr = probeByAddr.get(a.id) || [];
+          const rtt = pr.filter(x => x.ok && x.rtt_ms).map(x => x.rtt_ms);
+          const [hc, ht] = health[a.health] || health.unknown;
+          return `<div class="addr">
+            <span class="ip">${esc(a.ip)}</span>
+            <select data-addr="${a.id}">${["active", "spare", "blocked", "disabled"].map(s => `<option value="${s}" ${a.state === s ? "selected" : ""}>${{ active: "основной", spare: "запасной", blocked: "заблокирован", disabled: "выключен" }[s]}</option>`).join("")}</select>
+            <span><span class="dot ${hc}"></span> <span class="muted">${ht}${rtt.length ? ` · ${Math.min(...rtt)} мс` : ""}</span></span>
+            ${published.has(a.ip) ? `<span class="pub">в DNS</span>` : ""}
+            <button class="link bad" data-deladdr="${a.id}">убрать</button>
+          </div>`;
+        }).join("")}
+        <form class="addaddr" data-node="${n.id}" style="display:flex;gap:8px;margin-top:4px"><input class="f" name="ip" placeholder="ещё IP" style="height:28px;width:150px;font-size:12px"><button class="link">добавить</button></form>
+      </div>
+      <div class="acts">
+        <button class="link" data-reinstall="${n.id}">Команда установки</button>
+        <button class="link" data-state="${n.id}" data-cur="${n.state}">${n.state === "disabled" ? "Включить" : "Выключить"}</button>
+        <button class="link bad" data-delnode="${n.id}" data-name="${esc(n.name)}">Удалить</button>
+      </div>
+      <div style="grid-column:1/-1" id="cmd-${n.id}"></div>
+    </div>`;
+  };
+  return `<div class="cluster">
+    <section style="margin-top:0">
+      <div class="sh"><h2>Кластер ${esc(c.name)}</h2><button class="btn sm" data-addnode="${c.id}">Добавить сервер</button></div>
+      <div class="meta">
+        <div><span class="label">Домен для клиентов</span><span class="mono">${esc(c.hostname)}</span></div>
+        <div><span class="label">Сейчас в DNS</span><span class="mono">${(dns.records || []).map(esc).join(", ") || "—"}</span></div>
+        <div><span class="label">Порт</span><span class="mono">${c.listen_port}/udp</span></div>
+        <div><span class="label">Режим</span><span>${c.dns_mode === "all" ? "все адреса" : "один адрес, остальные в резерве"}</span></div>
+        <div><span class="label">DNS-провайдер</span><span>${state.meta.dns_provider === "cloudflare" ? "Cloudflare, автоматически" : "вручную"}</span></div>
+      </div>
+      ${dns.error ? `<div class="err" style="color:var(--bad);font-size:13px;margin-bottom:12px">Ошибка DNS: ${esc(dns.error)}</div>` : ""}
+      <div id="nform-${c.id}"></div>
+      ${nodes.map(nodeRow).join("") || `<div class="empty">Серверов нет</div>`}
+    </section>
+  </div>`;
+}
+
+function installCmd(token) {
+  return `curl -fsSL ${location.origin}/install.sh | FLEET_AGENT_TOKEN=${token} bash`;
+}
+function showCmd(target, title, cmd, note) {
+  target.innerHTML = `<div style="margin-top:6px"><div class="label">${esc(title)}</div><div class="cmd">${esc(cmd)}<button>копировать</button></div>${note ? `<div class="note">${note}</div>` : ""}</div>`;
+  target.querySelector(".cmd button").onclick = () => copy(cmd);
+}
+
+function bindServers() {
+  const main = document.querySelector("main");
+  const nc = document.getElementById("nc");
+  if (nc) nc.onclick = () => {
+    const f = document.getElementById("cform");
+    f.innerHTML = `<form class="form" id="cf">
+      <label><span>Название</span><input class="f" name="name" value="main" required></label>
+      <label><span>Домен для клиентов</span><input class="f" name="host" placeholder="edge.example.com" required></label>
+      <button class="btn">Создать</button></form>`;
+    document.getElementById("cf").onsubmit = async e => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      await run(() => api("/clusters", { method: "POST", body: { name: d.get("name"), hostname: d.get("host") } }), "Кластер создан");
+      state.redrawServers();
+    };
+  };
+  main.querySelectorAll("[data-addnode]").forEach(b => b.onclick = () => {
+    const cid = b.dataset.addnode;
+    const f = document.getElementById("nform-" + cid);
+    if (f.innerHTML) { f.innerHTML = ""; return; }
+    f.innerHTML = `<form class="form" id="nf-${cid}">
+      <label><span>Имя</span><input class="f" name="name" placeholder="de-3" required></label>
+      <label style="flex:1"><span>Публичные IP через запятую, первый основной</span><input class="f" name="ips" placeholder="203.0.113.10, 203.0.113.11" required></label>
+      <button class="btn">Добавить</button></form>`;
+    document.getElementById("nf-" + cid).onsubmit = async e => {
+      e.preventDefault();
+      const d = new FormData(e.target);
+      const ips = String(d.get("ips")).split(/[\s,]+/).filter(Boolean);
+      const n = await run(() => api(`/clusters/${cid}/nodes`, { method: "POST", body: { name: d.get("name"), addresses: ips } }), "Сервер добавлен");
+      showCmd(f, "Выполните на новом сервере от root", installCmd(n.agent_token),
+        "Нужна Ubuntu 22.04 или новее. Команда поставит модуль ядра и агента, через пару минут сервер станет зелёным. Токен показывается один раз.");
+    };
+  });
+  main.querySelectorAll("[data-reinstall]").forEach(b => confirmBtn(b, "Старый токен перестанет работать. Да?", async () => {
+    const r = await run(() => api(`/nodes/${b.dataset.reinstall}/token`, { method: "POST" }));
+    showCmd(document.getElementById("cmd-" + b.dataset.reinstall), "Выполните на сервере от root", installCmd(r.agent_token), "Переустановит агента с новым токеном.");
+  }));
+  main.querySelectorAll("[data-state]").forEach(b => b.onclick = async () => {
+    await run(() => api(`/nodes/${b.dataset.state}`, { method: "PATCH", body: { state: b.dataset.cur === "disabled" ? "active" : "disabled" } }), "Готово");
+    state.redrawServers();
+  });
+  main.querySelectorAll("[data-delnode]").forEach(b => confirmBtn(b, "Удалить сервер?", async () => {
+    await run(() => api(`/nodes/${b.dataset.delnode}`, { method: "DELETE" }), "Сервер удалён");
+    const holder = document.getElementById("cmd-" + b.dataset.delnode);
+    showCmd(holder, `Чтобы убрать агента с ${b.dataset.name}, выполните на нём`, `curl -fsSL ${location.origin}/uninstall.sh | bash`, "");
+    holder.id = "snode";
+  }));
+  main.querySelectorAll("select[data-addr]").forEach(s => s.onchange = async () => {
+    await run(() => api(`/addresses/${s.dataset.addr}`, { method: "PATCH", body: { state: s.value } }), "Сохранено");
+    state.redrawServers();
+  });
+  main.querySelectorAll("[data-deladdr]").forEach(b => confirmBtn(b, "точно?", async () => {
+    await run(() => api(`/addresses/${b.dataset.deladdr}`, { method: "DELETE" }), "Адрес удалён");
+    state.redrawServers();
+  }));
+  main.querySelectorAll("form.addaddr").forEach(f => f.onsubmit = async e => {
+    e.preventDefault();
+    const ip = new FormData(f).get("ip").trim();
+    if (!ip) return;
+    await run(() => api(`/nodes/${f.dataset.node}/addresses`, { method: "POST", body: { ip } }), "Адрес добавлен как запасной");
+    state.redrawServers();
+  });
+}
+
+// события
+async function viewEvents() {
+  const main = shell("events");
+  await loadMeta();
+  const events = await api("/events?limit=300");
+  main.innerHTML = `<div class="rise"><div class="head"><div><h1>События</h1><div class="sub">Блокировки, переключения DNS, ошибки агентов</div></div></div>
+    <div>${events.map(evRow).join("") || `<div class="empty">Пусто</div>`}</div></div>`;
+  collectHealth().catch(() => {});
+}
+
+route();
+</script>
+</body>
+</html>

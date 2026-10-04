@@ -57,6 +57,7 @@ FLEET_IFACE=${FLEET_IFACE}
 EOF
 install -m 0644 "$SCRIPT_DIR/fleet-agent.service" /etc/systemd/system/fleet-agent.service
 systemctl daemon-reload
-systemctl enable --now fleet-agent
+systemctl enable fleet-agent
+systemctl restart fleet-agent
 sleep 3
 systemctl --no-pager --lines=20 status fleet-agent || true

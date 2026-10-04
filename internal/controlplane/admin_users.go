@@ -2,6 +2,7 @@ package controlplane
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -213,23 +214,23 @@ func (s *Server) deletePeer(w http.ResponseWriter, r *http.Request) {
 
 var unsafeFileChars = regexp.MustCompile(`[^a-zA-Z0-9_.-]+`)
 
-// getPeerConfig выдаёт конфиг пира (format=amnezia или conf)
-func (s *Server) getPeerConfig(w http.ResponseWriter, r *http.Request) {
+// errNoPrivateKey возвращается, если ключ пира сгенерировал сам клиент
+var errNoPrivateKey = errors.New("приватный ключ пира неизвестен (ключ передан клиентом)")
+
+// peerClientConfig собирает клиентский конфиг пира из запроса с {id}
+func (s *Server) peerClientConfig(r *http.Request) (awg.ClientConfig, error) {
 	p, err := s.store.GetPeer(r.Context(), r.PathValue("id"))
 	if err != nil {
-		s.writeStoreError(w, err)
-		return
+		return awg.ClientConfig{}, err
 	}
 	if p.PrivateKey.IsZero() {
-		writeError(w, http.StatusConflict, "приватный ключ пира неизвестен (ключ передан клиентом)")
-		return
+		return awg.ClientConfig{}, errNoPrivateKey
 	}
 	c, err := s.store.GetCluster(r.Context(), p.ClusterID)
 	if err != nil {
-		s.writeStoreError(w, err)
-		return
+		return awg.ClientConfig{}, err
 	}
-	cfg := awg.ClientConfig{
+	return awg.ClientConfig{
 		Description:     c.Name,
 		Host:            c.Hostname,
 		Port:            c.ListenPort,
@@ -242,6 +243,16 @@ func (s *Server) getPeerConfig(w http.ResponseWriter, r *http.Request) {
 		DNS:             c.DNS,
 		MTU:             c.MTU,
 		Params:          c.Params,
+		FileName:        unsafeFileChars.ReplaceAllString(c.Name+"-"+p.Name, "_"),
+	}, nil
+}
+
+// getPeerConfig выдаёт конфиг пира (format=amnezia или conf)
+func (s *Server) getPeerConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := s.peerClientConfig(r)
+	if err != nil {
+		s.writeStoreError(w, err)
+		return
 	}
 	switch r.URL.Query().Get("format") {
 	case "", "amnezia":
@@ -252,9 +263,8 @@ func (s *Server) getPeerConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"url": url})
 	case "conf":
-		name := unsafeFileChars.ReplaceAllString(c.Name+"-"+p.Name, "_")
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.conf"`, name))
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s.conf"`, cfg.FileName))
 		_, _ = w.Write([]byte(cfg.NativeConf()))
 	default:
 		writeError(w, http.StatusBadRequest, "format: amnezia или conf")

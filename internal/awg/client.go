@@ -26,6 +26,8 @@ type ClientConfig struct {
 	MTU             int
 	AllowedIPs      []string
 	Params          Params
+	// FileName без расширения для скачивания .conf
+	FileName string
 }
 
 const amneziaContainer = "amnezia-awg2"

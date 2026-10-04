@@ -16,6 +16,7 @@ type Config struct {
 	MasterKey     string
 	AdminToken    string
 
+	DistDir            string
 	DNSProvider        string
 	CloudflareToken    string
 	CloudflareZoneID   string
@@ -43,6 +44,7 @@ func LoadConfig() (Config, error) {
 		ClickHouseURL:      os.Getenv("FLEET_CLICKHOUSE_URL"),
 		MasterKey:          os.Getenv("FLEET_MASTER_KEY"),
 		AdminToken:         os.Getenv("FLEET_ADMIN_TOKEN"),
+		DistDir:            env("FLEET_DIST_DIR", "/usr/local/share/fleetd"),
 		DNSProvider:        env("FLEET_DNS_PROVIDER", "none"),
 		CloudflareToken:    os.Getenv("FLEET_CLOUDFLARE_API_TOKEN"),
 		CloudflareZoneID:   os.Getenv("FLEET_CLOUDFLARE_ZONE_ID"),

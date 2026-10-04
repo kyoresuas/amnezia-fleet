@@ -68,6 +68,9 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("GET /api/v1/users/{id}/peers", s.listUserPeers)
 	admin.HandleFunc("POST /api/v1/users/{id}/peers", s.createPeer)
 
+	admin.HandleFunc("GET /api/v1/meta", s.meta)
+	admin.HandleFunc("GET /api/v1/peers", s.listAllPeers)
+	admin.HandleFunc("GET /api/v1/peers/{id}/qr", s.peerQR)
 	admin.HandleFunc("GET /api/v1/peers/{id}", s.getPeer)
 	admin.HandleFunc("PATCH /api/v1/peers/{id}", s.updatePeer)
 	admin.HandleFunc("DELETE /api/v1/peers/{id}", s.deletePeer)
@@ -85,6 +88,11 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("GET /api/v1/events", s.listEvents)
 
 	mux.Handle("/api/", s.requireAdmin(admin))
+	mux.Handle("GET /panel/", s.panelHandler())
+	mux.HandleFunc("GET /{$}", redirectPanel)
+	mux.HandleFunc("GET /install.sh", s.installScript)
+	mux.HandleFunc("GET /uninstall.sh", s.uninstallScript)
+	mux.HandleFunc("GET /dist/{name}", s.distFile)
 	mux.HandleFunc("GET /agent/v1/state", s.agentState)
 	mux.HandleFunc("POST /agent/v1/report", s.agentReport)
 	mux.HandleFunc("GET /probe/v1/targets", s.probeTargets)
@@ -207,7 +215,7 @@ func (s *Server) writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "не найдено")
 	case errors.Is(err, store.ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, ipam.ErrExhausted):
+	case errors.Is(err, ipam.ErrExhausted), errors.Is(err, errNoPrivateKey):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		s.log.Error("внутренняя ошибка", "err", err)
