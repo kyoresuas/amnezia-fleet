@@ -105,6 +105,8 @@ type User struct {
 	Status            UserStatus `json:"status"`
 	TrafficLimitBytes *int64     `json:"traffic_limit_bytes,omitempty"`
 	ExpiresAt         *time.Time `json:"expires_at,omitempty"`
+	DeviceLimit       *int       `json:"device_limit,omitempty"`
+	HasLink           bool       `json:"has_link"`
 	CreatedAt         time.Time  `json:"created_at"`
 }
 

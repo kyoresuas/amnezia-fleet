@@ -9,21 +9,21 @@ import (
 	"github.com/kyoresuas/amnezia-fleet/internal/model"
 )
 
-const userColumns = `id, name, note, status, traffic_limit_bytes, expires_at, created_at`
+const userColumns = `id, name, note, status, traffic_limit_bytes, expires_at, device_limit, link_token_hash IS NOT NULL, created_at`
 
 // scanUser читает пользователя
 func scanUser(row pgx.Row) (model.User, error) {
 	var u model.User
 	var status string
-	err := row.Scan(&u.ID, &u.Name, &u.Note, &status, &u.TrafficLimitBytes, &u.ExpiresAt, &u.CreatedAt)
+	err := row.Scan(&u.ID, &u.Name, &u.Note, &status, &u.TrafficLimitBytes, &u.ExpiresAt, &u.DeviceLimit, &u.HasLink, &u.CreatedAt)
 	u.Status = model.UserStatus(status)
 	return u, mapErr(err)
 }
 
 // CreateUser создаёт пользователя
 func (s *Store) CreateUser(ctx context.Context, u model.User) (model.User, error) {
-	return scanUser(s.pool.QueryRow(ctx, `INSERT INTO users (name, note, traffic_limit_bytes, expires_at)
-		VALUES ($1, $2, $3, $4) RETURNING `+userColumns, u.Name, u.Note, u.TrafficLimitBytes, u.ExpiresAt))
+	return scanUser(s.pool.QueryRow(ctx, `INSERT INTO users (name, note, traffic_limit_bytes, expires_at, device_limit)
+		VALUES ($1, $2, $3, $4, $5) RETURNING `+userColumns, u.Name, u.Note, u.TrafficLimitBytes, u.ExpiresAt, u.DeviceLimit))
 }
 
 // GetUser возвращает пользователя
@@ -47,6 +47,7 @@ type UserPatch struct {
 	// nil внутри снимает значение
 	TrafficLimitBytes **int64
 	ExpiresAt         **time.Time
+	DeviceLimit       **int
 }
 
 // UpdateUser применяет патч и поднимает ревизии затронутых кластеров
@@ -72,9 +73,12 @@ func (s *Store) UpdateUser(ctx context.Context, id string, p UserPatch) (model.U
 		if p.ExpiresAt != nil {
 			cur.ExpiresAt = *p.ExpiresAt
 		}
+		if p.DeviceLimit != nil {
+			cur.DeviceLimit = *p.DeviceLimit
+		}
 		out, err = scanUser(tx.QueryRow(ctx, `UPDATE users SET name = $2, note = $3, status = $4,
-			traffic_limit_bytes = $5, expires_at = $6 WHERE id = $1 RETURNING `+userColumns,
-			id, cur.Name, cur.Note, string(cur.Status), cur.TrafficLimitBytes, cur.ExpiresAt))
+			traffic_limit_bytes = $5, expires_at = $6, device_limit = $7 WHERE id = $1 RETURNING `+userColumns,
+			id, cur.Name, cur.Note, string(cur.Status), cur.TrafficLimitBytes, cur.ExpiresAt, cur.DeviceLimit))
 		if err != nil {
 			return err
 		}
@@ -133,4 +137,44 @@ func (s *Store) BumpExpiredUsers(ctx context.Context, since time.Time) (int64, e
 		return 0, err
 	}
 	return tag.RowsAffected(), nil
+}
+
+// SetUserLink сохраняет новый токен ссылки для устройств, старая ссылка перестаёт работать
+func (s *Store) SetUserLink(ctx context.Context, id, token string, hash []byte) error {
+	sealed, err := s.box.Seal([]byte(token))
+	if err != nil {
+		return err
+	}
+	tag, err := s.pool.Exec(ctx, `UPDATE users SET link_token_enc = $2, link_token_hash = $3 WHERE id = $1`, id, sealed, hash)
+	if err != nil {
+		return mapErr(err)
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// UserLink возвращает токен ссылки пользователя или пустую строку
+func (s *Store) UserLink(ctx context.Context, id string) (string, error) {
+	var sealed []byte
+	if err := s.pool.QueryRow(ctx, `SELECT link_token_enc FROM users WHERE id = $1`, id).Scan(&sealed); err != nil {
+		return "", mapErr(err)
+	}
+	if len(sealed) == 0 {
+		return "", nil
+	}
+	raw, err := s.box.Open(sealed)
+	return string(raw), err
+}
+
+// DeleteUserLink отключает ссылку для устройств
+func (s *Store) DeleteUserLink(ctx context.Context, id string) error {
+	_, err := s.pool.Exec(ctx, `UPDATE users SET link_token_enc = NULL, link_token_hash = NULL WHERE id = $1`, id)
+	return err
+}
+
+// GetUserByLink находит пользователя по хешу токена ссылки
+func (s *Store) GetUserByLink(ctx context.Context, hash []byte) (model.User, error) {
+	return scanUser(s.pool.QueryRow(ctx, `SELECT `+userColumns+` FROM users WHERE link_token_hash = $1`, hash))
 }

@@ -201,7 +201,7 @@ td.r, th.r { text-align: right; }
 "use strict";
 const TOKEN_KEY = "fleet.token";
 const $app = document.getElementById("app");
-const state = { meta: null, clusters: [], token: null, timer: null };
+const state = { meta: null, clusters: [], token: null, timer: null, nav: 0 };
 
 // хранилище токена может быть недоступно в приватном режиме
 function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch { return state.token; } }
@@ -301,6 +301,7 @@ function shell(active) {
 
 async function route() {
   clearInterval(state.timer);
+  state.nav++;
   if (!getToken()) return renderLogin();
   const h = location.hash || "#/";
   for (const [re, fn] of routes) {
@@ -375,6 +376,7 @@ async function onlinePeers() {
 // обзор
 async function viewOverview() {
   const main = shell("overview");
+  const nav = state.nav;
   await loadMeta();
   const draw = async () => {
     const [h, usage, users, online, events] = await Promise.all([
@@ -393,6 +395,7 @@ async function viewOverview() {
     const top = [...byUser.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
     const uname = new Map(users.map(u => [u.id, u.name]));
     const t = splitBytes(total);
+    if (nav !== state.nav) return;
     main.innerHTML = `
       <div class="rise">
         <div class="head"><div><h1>Обзор</h1><div class="sub">${new Date().toLocaleDateString("ru-RU", { month: "long", year: "numeric" })}</div></div></div>
@@ -422,7 +425,7 @@ async function viewOverview() {
       </div>`;
   };
   await draw();
-  state.timer = setInterval(() => draw().catch(() => {}), 15000);
+  if (nav === state.nav) state.timer = setInterval(() => draw().catch(() => {}), 15000);
 }
 
 function evRow(e) {
@@ -433,6 +436,7 @@ function evRow(e) {
 // пользователи
 async function viewUsers() {
   const main = shell("users");
+  const nav = state.nav;
   await loadMeta();
   const [users, peers, usage, online] = await Promise.all([
     api("/users"), api("/peers"),
@@ -462,12 +466,13 @@ async function viewUsers() {
       <td><div style="display:flex;align-items:center;gap:10px"><span class="dot ${on.get(u.id) ? "ok" : ""}"></span><b style="font-weight:500">${esc(u.name)}</b></div>
         ${u.note ? `<div class="muted" style="font-size:12px;margin:2px 0 0 17px">${esc(u.note)}</div>` : ""}</td>
       <td>${u.status === "active" ? (u.expires_at && new Date(u.expires_at) < new Date() ? `<span class="pill warn">истёк</span>` : `<span class="pill">активен</span>`) : `<span class="pill bad">приостановлен</span>`}</td>
-      <td class="num">${devs.get(u.id) || 0}${on.get(u.id) ? ` <span class="muted">· ${on.get(u.id)} онлайн</span>` : ""}</td>
+      <td class="num">${devs.get(u.id) || 0}${u.device_limit ? `<span class="muted"> / ${u.device_limit}</span>` : ""}${on.get(u.id) ? ` <span class="muted">· ${on.get(u.id)} онлайн</span>` : ""}</td>
       <td class="r"><div class="num">${bytes(used)}</div><div class="share" style="margin-left:auto"><b style="width:${(used / max * 100).toFixed(1)}%"></b></div></td>
       <td class="r num hide">${lim ? `${Math.min(100, Math.round(used / lim * 100))}% из ${bytes(lim)}` : `<span class="muted">—</span>`}</td>
       <td class="r hide muted">${u.expires_at ? dateRu(u.expires_at) : "—"}</td>
     </tr>`;
   };
+  if (nav !== state.nav) return;
   main.innerHTML = `
     <div class="rise">
       <div class="head"><div><h1>Пользователи</h1><div class="sub">Трафик с начала месяца</div></div>
@@ -488,6 +493,7 @@ async function viewUsers() {
       <label><span>Заметка</span><input class="f" name="note"></label>
       <label><span>Лимит, ГБ в месяц</span><input class="f" name="limit" type="number" min="1" style="width:150px" placeholder="без лимита"></label>
       <label><span>Действует до</span><input class="f" name="exp" type="date"></label>
+      <label><span>Устройств максимум</span><input class="f" name="devlim" type="number" min="1" style="width:150px" placeholder="без лимита"></label>
       <button class="btn">Создать</button></form>`;
     document.getElementById("uf").onsubmit = async e => {
       e.preventDefault();
@@ -495,6 +501,7 @@ async function viewUsers() {
       const body = { name: d.get("name"), note: d.get("note") };
       if (d.get("limit")) body.traffic_limit_bytes = Math.round(Number(d.get("limit")) * 1024 ** 3);
       if (d.get("exp")) body.expires_at = new Date(d.get("exp") + "T23:59:59").toISOString();
+      if (d.get("devlim")) body.device_limit = Number(d.get("devlim"));
       const u = await run(() => api("/users", { method: "POST", body }), "Пользователь создан");
       location.hash = "#/users/" + u.id;
     };
@@ -504,6 +511,7 @@ async function viewUsers() {
 // карточка пользователя
 async function viewUser(id) {
   const main = shell("users");
+  const nav = state.nav;
   await loadMeta();
   const tele = state.meta.telemetry;
   const from30 = new Date(Date.now() - 29 * 86400e3); from30.setHours(0, 0, 0, 0);
@@ -530,6 +538,7 @@ async function viewUser(id) {
       </div></div>`;
   };
   const maxDest = Math.max(1, ...dests.map(d => d.bytes_up + d.bytes_down));
+  if (nav !== state.nav) return;
   main.innerHTML = `
     <div class="rise">
       <div class="head">
@@ -544,10 +553,16 @@ async function viewUser(id) {
         <div><div class="label">За месяц</div><div class="v num">${bytes(usedMonth)}</div></div>
         <div><div class="label">Лимит</div><div class="v num">${lim ? `${bytes(lim)} <span class="muted">· ${Math.min(100, Math.round(usedMonth / lim * 100))}%</span>` : "нет"}</div></div>
         <div><div class="label">Действует до</div><div class="v">${u.expires_at ? dateRu(u.expires_at) : "бессрочно"}</div></div>
+        <div><div class="label">Устройства</div><div class="v num">${peers.length}${u.device_limit ? ` <span class="muted">из ${u.device_limit}</span>` : ` <span class="muted">· без лимита</span>`}</div></div>
         <div><div class="label">Создан</div><div class="v">${dateRu(u.created_at)}</div></div>
-        <div style="margin-left:auto;align-self:flex-end"><button class="link" id="edit">Изменить лимит и срок</button></div>
+        <div style="margin-left:auto;align-self:flex-end"><button class="link" id="edit">Изменить лимиты и срок</button></div>
       </div>
       <div id="eform" style="margin-top:20px"></div>
+
+      <section>
+        <div class="sh"><h2>Ссылка для устройств</h2><span class="muted" style="font-size:13px">человек открывает её на каждом устройстве и получает свой ключ</span></div>
+        <div id="lnk" style="padding-top:14px"></div>
+      </section>
 
       <section>
         <div class="sh"><h2>Устройства</h2><button class="btn sm" id="newdev">Новое устройство</button></div>
@@ -573,6 +588,7 @@ async function viewUser(id) {
       </div>` : `<section><div class="empty">Учёт трафика выключен: не настроен ClickHouse</div></section>`}
     </div>`;
 
+  drawLink(id, u.has_link);
   document.getElementById("st").onclick = async () => {
     await run(() => api(`/users/${id}`, { method: "PATCH", body: { status: u.status === "active" ? "suspended" : "active" } }), "Готово");
     viewUser(id);
@@ -587,6 +603,7 @@ async function viewUser(id) {
     f.innerHTML = `<form class="form" id="ef">
       <label><span>Лимит, ГБ в месяц</span><input class="f" name="limit" type="number" min="1" style="width:160px" value="${lim ? +(lim / 1024 ** 3).toFixed(2) : ""}" placeholder="без лимита"></label>
       <label><span>Действует до</span><input class="f" name="exp" type="date" value="${u.expires_at ? u.expires_at.slice(0, 10) : ""}"></label>
+      <label><span>Устройств максимум</span><input class="f" name="devlim" type="number" min="1" style="width:150px" value="${u.device_limit || ""}" placeholder="без лимита"></label>
       <label><span>Заметка</span><input class="f" name="note" value="${esc(u.note || "")}"></label>
       <button class="btn">Сохранить</button></form>`;
     document.getElementById("ef").onsubmit = async e => {
@@ -596,6 +613,7 @@ async function viewUser(id) {
         traffic_limit_bytes: d.get("limit") ? Math.round(Number(d.get("limit")) * 1024 ** 3) : null,
         expires_at: d.get("exp") ? new Date(d.get("exp") + "T23:59:59").toISOString() : null,
         note: d.get("note"),
+        device_limit: d.get("devlim") ? Number(d.get("devlim")) : null,
       } }), "Сохранено");
       viewUser(id);
     };
@@ -631,6 +649,22 @@ async function viewUser(id) {
     const list = await api(`/users/${id}/destinations?limit=20&by=${b.dataset.by}`);
     document.getElementById("dests").innerHTML = destRows(list, Math.max(1, ...list.map(d => d.bytes_up + d.bytes_down)), b.dataset.by === "ip");
   });
+}
+
+async function drawLink(id, has) {
+  const box = document.getElementById("lnk");
+  if (!box) return;
+  if (!has) {
+    box.innerHTML = `<button class="btn" id="lmk">Создать ссылку</button>`;
+    document.getElementById("lmk").onclick = async () => { await run(() => api(`/users/${id}/link`, { method: "POST" }), "Ссылка создана"); drawLink(id, true); };
+    return;
+  }
+  const { url } = await api(`/users/${id}/link`);
+  box.innerHTML = `<div class="cmd" style="margin-top:0">${esc(url)}<button>копировать</button></div>
+    <div style="display:flex;gap:18px;margin-top:12px"><button class="link" id="lrot">Выдать новую</button><button class="link bad" id="loff">Отключить</button></div>`;
+  box.querySelector(".cmd button").onclick = () => copy(url);
+  confirmBtn(document.getElementById("lrot"), "Старая перестанет работать. Да?", async () => { await run(() => api(`/users/${id}/link`, { method: "POST" }), "Новая ссылка готова"); drawLink(id, true); });
+  confirmBtn(document.getElementById("loff"), "Точно отключить?", async () => { await run(() => api(`/users/${id}/link`, { method: "DELETE" }), "Ссылка отключена"); drawLink(id, false); });
 }
 
 function destRows(list, max, byIP) {
@@ -719,6 +753,7 @@ async function showKey(p) {
 // серверы
 async function viewServers() {
   const main = shell("servers");
+  const nav = state.nav;
   await loadMeta();
   const draw = async () => {
     const h = await collectHealth();
@@ -729,6 +764,7 @@ async function viewServers() {
     const probeByAddr = new Map();
     for (const s of statuses) { const l = probeByAddr.get(s.address_id) || []; l.push(s); probeByAddr.set(s.address_id, l); }
     const keep = document.getElementById("snode")?.innerHTML || "";
+    if (nav !== state.nav) return;
     main.innerHTML = `
       <div class="rise">
         <div class="head"><div><h1>Серверы</h1><div class="sub">${h.alive} из ${h.total} на связи</div></div>
@@ -748,7 +784,7 @@ async function viewServers() {
   };
   state.redrawServers = draw;
   await draw();
-  state.timer = setInterval(() => { if (!document.querySelector(".form, .cmd")) draw().catch(() => {}); }, 15000);
+  if (nav === state.nav) state.timer = setInterval(() => { if (!document.querySelector(".form, .cmd")) draw().catch(() => {}); }, 15000);
 }
 
 function clusterBlock(c, nodes, dns, probeByAddr) {
@@ -879,8 +915,10 @@ function bindServers() {
 // события
 async function viewEvents() {
   const main = shell("events");
+  const nav = state.nav;
   await loadMeta();
   const events = await api("/events?limit=300");
+  if (nav !== state.nav) return;
   main.innerHTML = `<div class="rise"><div class="head"><div><h1>События</h1><div class="sub">Блокировки, переключения DNS, ошибки агентов</div></div></div>
     <div>${events.map(evRow).join("") || `<div class="empty">Пусто</div>`}</div></div>`;
   collectHealth().catch(() => {});

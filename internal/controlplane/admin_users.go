@@ -1,6 +1,7 @@
 package controlplane
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +20,7 @@ type createUserRequest struct {
 	Note              string     `json:"note"`
 	TrafficLimitBytes *int64     `json:"traffic_limit_bytes"`
 	ExpiresAt         *time.Time `json:"expires_at"`
+	DeviceLimit       *int       `json:"device_limit"`
 }
 
 // createUser создаёт пользователя
@@ -35,6 +37,7 @@ func (s *Server) createUser(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := s.store.CreateUser(r.Context(), model.User{
 		Name: req.Name, Note: req.Note, TrafficLimitBytes: req.TrafficLimitBytes, ExpiresAt: req.ExpiresAt,
+		DeviceLimit: req.DeviceLimit,
 	})
 	if err != nil {
 		s.writeStoreError(w, err)
@@ -92,6 +95,13 @@ func (s *Server) updateUser(w http.ResponseWriter, r *http.Request) {
 			var v *time.Time
 			err = json.Unmarshal(val, &v)
 			p.ExpiresAt = &v
+		case "device_limit":
+			var v *int
+			err = json.Unmarshal(val, &v)
+			if v != nil && *v < 1 {
+				v = nil
+			}
+			p.DeviceLimit = &v
 		default:
 			err = fmt.Errorf("неизвестное поле %q", key)
 		}
@@ -133,6 +143,25 @@ type createPeerRequest struct {
 	PublicKey *awg.Key `json:"public_key"`
 }
 
+// newPeer генерирует ключи нового устройства; pub задаётся, если ключ сгенерировал клиент
+func newPeer(userID, clusterID, name string, pub *awg.Key) (model.Peer, error) {
+	p := model.Peer{UserID: userID, ClusterID: clusterID, Name: strings.TrimSpace(name)}
+	if p.Name == "" {
+		p.Name = "device"
+	}
+	var err error
+	if pub != nil && !pub.IsZero() {
+		p.PublicKey = *pub
+	} else {
+		if p.PrivateKey, err = awg.GeneratePrivateKey(); err != nil {
+			return p, err
+		}
+		p.PublicKey = p.PrivateKey.PublicKey()
+	}
+	p.PresharedKey, err = awg.GenerateSymmetricKey()
+	return p, err
+}
+
 // createPeer создаёт пира с собственным PSK и адресом в подсети кластера
 func (s *Server) createPeer(w http.ResponseWriter, r *http.Request) {
 	var req createPeerRequest
@@ -144,25 +173,12 @@ func (s *Server) createPeer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "cluster_id обязателен")
 		return
 	}
-	p := model.Peer{UserID: r.PathValue("id"), ClusterID: req.ClusterID, Name: strings.TrimSpace(req.Name)}
-	if p.Name == "" {
-		p.Name = "device"
-	}
-	var err error
-	if req.PublicKey != nil && !req.PublicKey.IsZero() {
-		p.PublicKey = *req.PublicKey
-	} else {
-		if p.PrivateKey, err = awg.GeneratePrivateKey(); err != nil {
-			s.writeStoreError(w, err)
-			return
-		}
-		p.PublicKey = p.PrivateKey.PublicKey()
-	}
-	if p.PresharedKey, err = awg.GenerateSymmetricKey(); err != nil {
+	p, err := newPeer(r.PathValue("id"), req.ClusterID, req.Name, req.PublicKey)
+	if err != nil {
 		s.writeStoreError(w, err)
 		return
 	}
-	out, err := s.store.CreatePeer(r.Context(), p)
+	out, err := s.store.CreatePeer(r.Context(), p, false)
 	if err != nil {
 		s.writeStoreError(w, err)
 		return
@@ -219,14 +235,19 @@ var errNoPrivateKey = errors.New("приватный ключ пира неиз�
 
 // peerClientConfig собирает клиентский конфиг пира из запроса с {id}
 func (s *Server) peerClientConfig(r *http.Request) (awg.ClientConfig, error) {
-	p, err := s.store.GetPeer(r.Context(), r.PathValue("id"))
+	return s.peerClientConfigByID(r.Context(), r.PathValue("id"))
+}
+
+// peerClientConfigByID собирает клиентский конфиг пира по идентификатору
+func (s *Server) peerClientConfigByID(ctx context.Context, id string) (awg.ClientConfig, error) {
+	p, err := s.store.GetPeer(ctx, id)
 	if err != nil {
 		return awg.ClientConfig{}, err
 	}
 	if p.PrivateKey.IsZero() {
 		return awg.ClientConfig{}, errNoPrivateKey
 	}
-	c, err := s.store.GetCluster(r.Context(), p.ClusterID)
+	c, err := s.store.GetCluster(ctx, p.ClusterID)
 	if err != nil {
 		return awg.ClientConfig{}, err
 	}
@@ -254,7 +275,12 @@ func (s *Server) getPeerConfig(w http.ResponseWriter, r *http.Request) {
 		s.writeStoreError(w, err)
 		return
 	}
-	switch r.URL.Query().Get("format") {
+	s.writePeerConfig(w, cfg, r.URL.Query().Get("format"))
+}
+
+// writePeerConfig отдаёт ссылку vpn:// в JSON или файл .conf
+func (s *Server) writePeerConfig(w http.ResponseWriter, cfg awg.ClientConfig, format string) {
+	switch format {
 	case "", "amnezia":
 		url, err := cfg.AmneziaURL()
 		if err != nil {

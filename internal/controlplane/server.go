@@ -28,6 +28,7 @@ type Server struct {
 	log          *slog.Logger
 	online       *onlineTracker
 	noCandidates flagSet
+	links        linkLimiter
 }
 
 // NewServer собирает сервер из зависимостей
@@ -67,6 +68,9 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("DELETE /api/v1/users/{id}", s.deleteUser)
 	admin.HandleFunc("GET /api/v1/users/{id}/peers", s.listUserPeers)
 	admin.HandleFunc("POST /api/v1/users/{id}/peers", s.createPeer)
+	admin.HandleFunc("GET /api/v1/users/{id}/link", s.getUserLink)
+	admin.HandleFunc("POST /api/v1/users/{id}/link", s.createUserLink)
+	admin.HandleFunc("DELETE /api/v1/users/{id}/link", s.deleteUserLink)
 
 	admin.HandleFunc("GET /api/v1/meta", s.meta)
 	admin.HandleFunc("GET /api/v1/peers", s.listAllPeers)
@@ -90,6 +94,11 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("/api/", s.requireAdmin(admin))
 	mux.Handle("GET /panel/", s.panelHandler())
 	mux.HandleFunc("GET /{$}", redirectPanel)
+	mux.HandleFunc("GET /s/{token}", s.linkPage)
+	mux.HandleFunc("GET /s/{token}/info", s.linkInfo)
+	mux.HandleFunc("POST /s/{token}/devices", s.linkCreateDevice)
+	mux.HandleFunc("GET /s/{token}/devices/{id}/config", s.linkDeviceConfig)
+	mux.HandleFunc("GET /s/{token}/devices/{id}/qr", s.linkDeviceQR)
 	mux.HandleFunc("GET /install.sh", s.installScript)
 	mux.HandleFunc("GET /uninstall.sh", s.uninstallScript)
 	mux.HandleFunc("GET /dist/{name}", s.distFile)
@@ -215,7 +224,7 @@ func (s *Server) writeStoreError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "не найдено")
 	case errors.Is(err, store.ErrConflict):
 		writeError(w, http.StatusConflict, err.Error())
-	case errors.Is(err, ipam.ErrExhausted), errors.Is(err, errNoPrivateKey):
+	case errors.Is(err, ipam.ErrExhausted), errors.Is(err, errNoPrivateKey), errors.Is(err, store.ErrDeviceLimit):
 		writeError(w, http.StatusConflict, err.Error())
 	default:
 		s.log.Error("внутренняя ошибка", "err", err)

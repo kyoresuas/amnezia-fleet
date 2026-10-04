@@ -7,8 +7,6 @@ import (
 	"net/http"
 	"path/filepath"
 
-	"rsc.io/qr"
-
 	"github.com/kyoresuas/amnezia-fleet/internal/store"
 )
 
@@ -118,20 +116,7 @@ func (s *Server) peerQR(w http.ResponseWriter, r *http.Request) {
 		s.writeStoreError(w, err)
 		return
 	}
-	url, err := cfg.AmneziaURL()
-	if err != nil {
-		s.writeStoreError(w, err)
-		return
-	}
-	code, err := qr.Encode(url, qr.L)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "ссылка не помещается в QR-код")
-		return
-	}
-	code.Scale = 4
-	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "no-store")
-	_, _ = w.Write(code.PNG())
+	writeQR(w, cfg)
 }
 
 // meta отдаёт настройки, нужные панели для оценки состояния

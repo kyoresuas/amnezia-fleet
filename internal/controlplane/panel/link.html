@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Подключение</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='4' fill='%23111'/%3E%3C/svg%3E">
+<style>
+@font-face { font-family: "Onest"; src: url("/panel/fonts/onest-cyrillic-wght-normal.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
+@font-face { font-family: "Onest"; src: url("/panel/fonts/onest-latin-wght-normal.woff2") format("woff2"); font-weight: 100 900; unicode-range: U+0000-00FF, U+2000-206F, U+2191, U+2193; }
+@font-face { font-family: "JB"; src: url("/panel/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2"); font-weight: 100 800; }
+:root { --ink: #111110; --muted: #8f8f89; --line: #ececea; --soft: #f7f7f5; --bad: #e5484d; --ok: #17a34a; }
+* { box-sizing: border-box; }
+html, body { margin: 0; background: #fff; color: var(--ink); }
+body { font: 400 15px/1.55 "Onest", ui-sans-serif, sans-serif; -webkit-font-smoothing: antialiased; }
+main { max-width: 520px; margin: 0 auto; padding: 56px 20px 80px; }
+.mark { display: flex; align-items: center; gap: 10px; font-family: "JB", monospace; font-weight: 600; letter-spacing: -0.03em; }
+.mark i { width: 9px; height: 9px; border-radius: 50%; background: var(--ink); }
+h1 { font-size: 34px; line-height: 1.1; font-weight: 500; letter-spacing: -0.035em; margin: 40px 0 10px; }
+.sub { color: var(--muted); }
+.rise > * { animation: rise .5s cubic-bezier(.2,.7,.2,1) both; }
+.rise > *:nth-child(2) { animation-delay: .05s; } .rise > *:nth-child(3) { animation-delay: .1s; } .rise > *:nth-child(n+4) { animation-delay: .15s; }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+.card { margin-top: 32px; padding: 24px; border: 1px solid var(--line); border-radius: 16px; }
+.label { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 500; }
+input { width: 100%; height: 44px; padding: 0 14px; margin: 10px 0 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; outline: none; }
+input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgba(17,17,16,.06); }
+select { width: 100%; height: 44px; padding: 0 10px; margin-bottom: 14px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: #fff; }
+.btn { display: flex; width: 100%; align-items: center; justify-content: center; height: 48px; border-radius: 999px; border: 1px solid var(--ink); background: var(--ink); color: #fff; font: inherit; font-weight: 500; cursor: pointer; transition: opacity .15s, transform .1s; }
+.btn:hover { opacity: .88; } .btn:active { transform: scale(.99); } .btn:disabled { opacity: .35; cursor: default; }
+.btn.ghost { background: #fff; color: var(--ink); border-color: var(--line); }
+.row { display: flex; gap: 10px; margin-top: 12px; } .row .btn { flex: 1; }
+.qr { display: grid; place-items: center; padding: 16px; border: 1px solid var(--line); border-radius: 12px; margin: 18px 0 14px; }
+.qr img { width: 100%; max-width: 280px; image-rendering: pixelated; }
+.uri { font-family: "JB", monospace; font-size: 11px; background: var(--soft); border-radius: 8px; padding: 12px; word-break: break-all; max-height: 84px; overflow: auto; color: #3d3d3a; }
+ol { padding-left: 20px; color: #3d3d3a; margin: 14px 0 0; } ol li { margin: 4px 0; }
+.dev { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.dev:last-child { border-bottom: 0; }
+.dev small { display: block; color: var(--muted); font-size: 12px; }
+.link { background: none; border: 0; color: var(--muted); cursor: pointer; font: inherit; font-size: 14px; padding: 0; }
+.link:hover { color: var(--ink); }
+.err { color: var(--bad); margin-top: 10px; font-size: 14px; }
+.meta { display: flex; justify-content: space-between; margin-bottom: 4px; }
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 11px 18px; border-radius: 999px; font-size: 13px; animation: rise .25s both; }
+</style>
+</head>
+<body>
+<main id="app"><div class="mark"><i></i>подключение</div></main>
+<script>
+"use strict";
+const token = location.pathname.split("/")[2] || "";
+const base = "/s/" + encodeURIComponent(token);
+const $ = id => document.getElementById(id);
+const app = $("app");
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+function toast(m) { const t = document.createElement("div"); t.className = "toast"; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 2500); }
+
+async function call(path, opts = {}) {
+  const res = await fetch(base + path, { ...opts, headers: opts.body ? { "Content-Type": "application/json" } : {}, body: opts.body ? JSON.stringify(opts.body) : undefined });
+  const ct = res.headers.get("content-type") || "";
+  const data = ct.includes("json") ? await res.json() : await res.blob();
+  if (!res.ok) throw new Error((data && data.error) || "ошибка " + res.status);
+  return data;
+}
+
+// название устройства по user agent, человек может поправить
+function guessName() {
+  const ua = navigator.userAgent;
+  if (/iPhone/.test(ua)) return "iPhone";
+  if (/iPad/.test(ua)) return "iPad";
+  if (/Android/.test(ua)) return "Android";
+  if (/Macintosh/.test(ua)) return navigator.maxTouchPoints > 1 ? "iPad" : "Mac";
+  if (/Windows/.test(ua)) return "Windows";
+  if (/Linux/.test(ua)) return "Linux";
+  return "Устройство";
+}
+
+async function load() {
+  let info;
+  try { info = await call("/info"); }
+  catch (e) {
+    app.innerHTML = `<div class="mark"><i></i>подключение</div><h1>Ссылка не работает</h1><p class="sub">${esc(e.message)}. Попросите новую у администратора.</p>`;
+    return;
+  }
+  const full = info.limit != null && info.total >= info.limit;
+  app.innerHTML = `<div class="rise">
+    <div class="mark"><i></i>подключение</div>
+    <h1>Привет, ${esc(info.name)}</h1>
+    <div class="sub">Каждое устройство получает свой ключ, так все работают одновременно. Откройте эту ссылку на нужном устройстве.</div>
+    <div class="card" id="new">
+      <div class="meta"><span class="label">Новое устройство</span><span class="label">${info.limit != null ? `${info.total} из ${info.limit}` : ""}</span></div>
+      ${full ? `<p class="sub" style="margin:12px 0 0">Устройств уже максимум. Удалить старое может администратор.</p>` : `
+      <input id="nm" value="${esc(guessName())}" maxlength="40" aria-label="Название устройства">
+      ${info.clusters.length > 1 ? `<select id="cl">${info.clusters.map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")}</select>` : ""}
+      <button class="btn" id="go">Получить ключ для этого устройства</button>
+      <div class="err" id="er"></div>`}
+    </div>
+    <div class="card">
+      <div class="label">Как подключиться</div>
+      <ol>
+        <li>Установите AmneziaVPN из App Store, Google Play или с сайта amnezia.org</li>
+        <li>Нажмите «Получить ключ» и скопируйте ссылку</li>
+        <li>В AmneziaVPN нажмите «+», выберите вставку ключа или сканирование QR-кода</li>
+      </ol>
+    </div>
+    ${info.devices.length ? `<div class="card"><div class="label">Ваши устройства</div>
+      ${info.devices.map(d => `<div class="dev"><div>${esc(d.name)}<small>${new Date(d.created_at).toLocaleDateString("ru-RU", { day: "numeric", month: "long" })}</small></div><button class="link" data-id="${esc(d.id)}" data-name="${esc(d.name)}">Показать ключ</button></div>`).join("")}
+    </div>` : ""}
+  </div>`;
+  const go = $("go");
+  if (go) go.onclick = async () => {
+    go.disabled = true; $("er").textContent = "";
+    try {
+      const d = await call("/devices", { method: "POST", body: { name: $("nm").value, cluster_id: $("cl") ? $("cl").value : "" } });
+      await load();
+      showKey(d.id, d.name);
+    } catch (e) { $("er").textContent = e.message; go.disabled = false; }
+  };
+  app.querySelectorAll("[data-id]").forEach(b => b.onclick = () => showKey(b.dataset.id, b.dataset.name));
+}
+
+async function showKey(id, name) {
+  const box = $("new");
+  box.innerHTML = `<div class="meta"><span class="label">Ключ: ${esc(name)}</span><button class="link" id="bk">Назад</button></div>
+    <div class="qr" id="q">Загрузка…</div>
+    <div class="uri" id="u">…</div>
+    <div class="row"><button class="btn" id="cp">Скопировать</button><button class="btn ghost" id="dl">Файл .conf</button></div>
+    <p class="sub" style="font-size:13px;margin:14px 0 0">QR удобно сканировать с другого экрана. На этом устройстве просто скопируйте ссылку и вставьте в AmneziaVPN.</p>`;
+  box.scrollIntoView({ behavior: "smooth", block: "start" });
+  $("bk").onclick = load;
+  try {
+    const [{ url }, qr] = await Promise.all([call(`/devices/${id}/config?format=amnezia`), call(`/devices/${id}/qr`).catch(() => null)]);
+    $("u").textContent = url;
+    $("q").innerHTML = qr ? `<img alt="QR" src="${URL.createObjectURL(qr)}">` : `<span class="sub">Скопируйте ссылку</span>`;
+    $("cp").onclick = async () => { try { await navigator.clipboard.writeText(url); toast("Скопировано"); } catch { toast("Выделите ссылку и скопируйте вручную"); } };
+    $("dl").onclick = async () => {
+      const blob = await call(`/devices/${id}/config?format=conf`);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = (name || "vpn").replace(/[^\w.-]+/g, "_") + ".conf";
+      a.click();
+    };
+  } catch (e) { $("q").textContent = e.message; }
+}
+
+load();
+</script>
+</body>
+</html>

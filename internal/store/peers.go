@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"net/netip"
 
 	"github.com/jackc/pgx/v5"
@@ -61,10 +62,28 @@ func (s *Store) collectPeers(rows pgx.Rows, err error) ([]model.Peer, error) {
 	return out, rows.Err()
 }
 
+// ErrDeviceLimit возвращается, когда у пользователя кончился лимит устройств
+var ErrDeviceLimit = errors.New("достигнут лимит устройств")
+
 // CreatePeer сохраняет пира, выделяя ему свободный адрес в подсети кластера
-func (s *Store) CreatePeer(ctx context.Context, p model.Peer) (model.Peer, error) {
+func (s *Store) CreatePeer(ctx context.Context, p model.Peer, enforceLimit bool) (model.Peer, error) {
 	var out model.Peer
 	err := pgx.BeginFunc(ctx, s.pool, func(tx pgx.Tx) error {
+		if enforceLimit {
+			var limit *int
+			if err := tx.QueryRow(ctx, `SELECT device_limit FROM users WHERE id = $1 FOR UPDATE`, p.UserID).Scan(&limit); err != nil {
+				return mapErr(err)
+			}
+			if limit != nil {
+				var n int
+				if err := tx.QueryRow(ctx, `SELECT count(*) FROM peers WHERE user_id = $1`, p.UserID).Scan(&n); err != nil {
+					return err
+				}
+				if n >= *limit {
+					return ErrDeviceLimit
+				}
+			}
+		}
 		var subnet4 netip.Prefix
 		var subnet6 *netip.Prefix
 		if err := tx.QueryRow(ctx, `SELECT subnet_v4, subnet_v6 FROM clusters WHERE id = $1 FOR UPDATE`, p.ClusterID).
