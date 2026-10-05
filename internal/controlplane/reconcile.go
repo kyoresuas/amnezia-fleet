@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/netip"
 	"slices"
 	"sync"
@@ -213,4 +214,84 @@ func joinAddrs(addrs []netip.Addr) string {
 		out += a.String()
 	}
 	return out
+}
+
+// publishAddress вручную делает адрес единственным опубликованным в своём семействе
+func (s *Server) publishAddress(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		AddressID string `json:"address_id"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	c, err := s.store.GetCluster(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.writeStoreError(w, err)
+		return
+	}
+	if c.DNSMode == model.DNSModeAll {
+		writeError(w, http.StatusConflict, "в режиме all публикуются все живые адреса")
+		return
+	}
+	nodes, err := s.store.ListNodes(r.Context(), c.ID)
+	if err != nil {
+		s.writeStoreError(w, err)
+		return
+	}
+	var addr model.Address
+	var node model.Node
+	for _, n := range nodes {
+		for _, a := range n.Addresses {
+			if a.ID == req.AddressID {
+				addr, node = a, n
+			}
+		}
+	}
+	switch {
+	case addr.ID == "":
+		writeError(w, http.StatusNotFound, "адрес не найден в кластере")
+		return
+	case node.State != model.NodeActive:
+		writeError(w, http.StatusConflict, "сервер выключен или выводится")
+		return
+	case !failover.NodeAlive(node, s.cfg.NodeStaleAfter, time.Now()):
+		writeError(w, http.StatusConflict, "сервер не на связи")
+		return
+	case addr.State != model.AddressActive && addr.State != model.AddressSpare:
+		writeError(w, http.StatusConflict, "адрес заблокирован или выключен")
+		return
+	}
+	cur, err := s.store.GetDNSState(r.Context(), c.ID)
+	if err != nil {
+		s.writeStoreError(w, err)
+		return
+	}
+	records := []netip.Addr{addr.IP}
+	for _, a := range cur.Records {
+		if a.Is4() != addr.IP.Is4() {
+			records = append(records, a)
+		}
+	}
+	recordType := "A"
+	if addr.IP.Is6() {
+		recordType = "AAAA"
+	}
+	if err := s.dns.SetRecords(r.Context(), c.Hostname, recordType, []netip.Addr{addr.IP}, c.DNSTTL); err != nil {
+		_ = s.store.SaveDNSState(r.Context(), c.ID, nil, err.Error())
+		writeError(w, http.StatusBadGateway, "DNS: "+err.Error())
+		return
+	}
+	if err := s.store.SaveDNSState(r.Context(), c.ID, records, ""); err != nil {
+		s.writeStoreError(w, err)
+		return
+	}
+	_ = s.store.AddEvent(r.Context(), c.ID, node.ID, "dns.manual",
+		fmt.Sprintf("%s: вручную %s -> %s (%s)", c.Hostname, joinAddrs(cur.Records), joinAddrs(records), node.Name))
+	st, err := s.store.GetDNSState(r.Context(), c.ID)
+	if err != nil {
+		s.writeStoreError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, st)
 }

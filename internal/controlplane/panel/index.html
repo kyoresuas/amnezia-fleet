@@ -809,7 +809,9 @@ function clusterBlock(c, nodes, dns, probeByAddr) {
             <span class="ip">${esc(a.ip)}</span>
             <select data-addr="${a.id}">${["active", "spare", "blocked", "disabled"].map(s => `<option value="${s}" ${a.state === s ? "selected" : ""}>${{ active: "основной", spare: "запасной", blocked: "заблокирован", disabled: "выключен" }[s]}</option>`).join("")}</select>
             <span><span class="dot ${hc}"></span> <span class="muted">${ht}${rtt.length ? ` · ${Math.min(...rtt)} мс` : ""}</span></span>
-            ${published.has(a.ip) ? `<span class="pub">в DNS</span>` : ""}
+            ${published.has(a.ip) ? `<span class="pub">в DNS</span>`
+              : (c.dns_mode !== "all" && alive && n.state === "active" && (a.state === "active" || a.state === "spare"))
+                ? `<button class="link" data-publish="${a.id}" data-cluster="${c.id}">сделать основным</button>` : ""}
             <button class="link bad" data-deladdr="${a.id}">убрать</button>
           </div>`;
         }).join("")}
@@ -899,6 +901,10 @@ function bindServers() {
     await run(() => api(`/addresses/${s.dataset.addr}`, { method: "PATCH", body: { state: s.value } }), "Сохранено");
     state.redrawServers();
   });
+  main.querySelectorAll("[data-publish]").forEach(b => confirmBtn(b, "переключить DNS?", async () => {
+    await run(() => api(`/clusters/${b.dataset.cluster}/dns/publish`, { method: "POST", body: { address_id: b.dataset.publish } }), "DNS переключён, клиенты перейдут при переподключении");
+    state.redrawServers();
+  }));
   main.querySelectorAll("[data-deladdr]").forEach(b => confirmBtn(b, "точно?", async () => {
     await run(() => api(`/addresses/${b.dataset.deladdr}`, { method: "DELETE" }), "Адрес удалён");
     state.redrawServers();

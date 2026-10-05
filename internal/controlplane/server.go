@@ -49,6 +49,7 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("DELETE /api/v1/clusters/{id}", s.deleteCluster)
 	admin.HandleFunc("GET /api/v1/clusters/{id}/dns", s.getClusterDNS)
 	admin.HandleFunc("POST /api/v1/clusters/{id}/dns/sync", s.syncClusterDNS)
+	admin.HandleFunc("POST /api/v1/clusters/{id}/dns/publish", s.publishAddress)
 	admin.HandleFunc("GET /api/v1/clusters/{id}/online", s.clusterOnline)
 
 	admin.HandleFunc("GET /api/v1/clusters/{id}/nodes", s.listNodes)
