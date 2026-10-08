@@ -4,7 +4,6 @@ package probe
 import (
 	"bufio"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"log/slog"
 	"strconv"
@@ -116,60 +115,6 @@ func handshakeDone(dev *device.Device) (bool, error) {
 
 // uapiConfig собирает конфигурацию UAPI
 func uapiConfig(priv awg.Key, t agentapi.ProbeTarget) string {
-	pr := t.Params
-	var b strings.Builder
-	line := func(k, v string) {
-		if v != "" {
-			fmt.Fprintf(&b, "%s=%s\n", k, v)
-		}
-	}
-	line("private_key", hex.EncodeToString(priv[:]))
-	line("jc", strconv.Itoa(int(pr.Jc)))
-	line("jmin", strconv.Itoa(int(pr.Jmin)))
-	line("jmax", strconv.Itoa(int(pr.Jmax)))
-	line("s1", strconv.Itoa(int(pr.S1)))
-	line("s2", strconv.Itoa(int(pr.S2)))
-	line("s3", strconv.Itoa(int(pr.S3)))
-	line("s4", strconv.Itoa(int(pr.S4)))
-	line("h1", rangeStr32(pr.H1))
-	line("h2", rangeStr32(pr.H2))
-	line("h3", rangeStr32(pr.H3))
-	line("h4", rangeStr32(pr.H4))
-	line("i1", pr.I1)
-	line("i2", pr.I2)
-	line("i3", pr.I3)
-	line("i4", pr.I4)
-	line("i5", pr.I5)
-	if !pr.HeaderProtectionKey.IsZero() {
-		line("header_protection_key", hex.EncodeToString(pr.HeaderProtectionKey[:]))
-	}
-	for _, r := range []struct {
-		key string
-		val awg.Range16
-	}{
-		{"content_padding_addition", pr.ContentPaddingAddition},
-		{"rekey_after_time", pr.RekeyAfterTime},
-		{"rekey_timeout", pr.RekeyTimeout},
-		{"reject_after_time", pr.RejectAfterTime},
-		{"keepalive_timeout", pr.KeepaliveTimeout},
-		{"max_handshake_attempts", pr.MaxHandshakeAttempts},
-	} {
-		if !r.val.IsZero() {
-			line(r.key, r.val.String())
-		}
-	}
-	line("random_trailers", strconv.FormatBool(pr.RandomTrailers))
-	line("disable_cookies", strconv.FormatBool(pr.DisableCookies))
-	line("public_key", hex.EncodeToString(t.ServerPublicKey[:]))
-	line("endpoint", t.Endpoint.String())
-	line("persistent_keepalive_interval", "1")
-	return b.String()
-}
-
-// rangeStr32 форматирует диапазон заголовка
-func rangeStr32(r awg.Range32) string {
-	if r.IsZero() {
-		return ""
-	}
-	return r.String()
+	return t.Params.UAPI(priv) + fmt.Sprintf("public_key=%s\nendpoint=%s\npersistent_keepalive_interval=1\n",
+		t.ServerPublicKey.Hex(), t.Endpoint)
 }

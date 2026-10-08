@@ -138,6 +138,10 @@ td.r, th.r { text-align: right; }
 .cmd { margin-top: 14px; padding: 14px 16px; background: var(--ink); color: #e8e8e4; border-radius: 8px; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; word-break: break-all; position: relative; }
 .cmd button { position: absolute; top: 10px; right: 10px; background: #2a2a28; color: #e8e8e4; border: 0; border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+.exitbox { padding: 18px 0 20px; border-top: 1px solid var(--line); }
+.exitbox .row1 { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 14px; }
+textarea.f { width: 100%; min-height: 150px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: 12.5px/1.6 var(--mono); outline: none; resize: vertical; }
+textarea.f:focus { border-color: var(--ink); }
 
 /* пользователь */
 .kv { display: flex; gap: 36px; flex-wrap: wrap; }
@@ -259,6 +263,9 @@ function ago(ts) {
 function dateRu(ts) { return ts ? new Date(ts).toLocaleDateString("ru-RU", { day: "numeric", month: "short", year: "numeric" }) : "—"; }
 function timeRu(ts) { return new Date(ts).toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" }); }
 
+function exitOf(cid) { return api(`/clusters/${cid}/exit`).catch(() => null); }
+function exitAlive(e) { return e && e.last_seen_at && Date.now() - new Date(e.last_seen_at).getTime() < 60000; }
+
 function nodeAlive(n) {
   const stale = (state.meta?.node_stale_after_seconds || 90) * 1000;
   return n.last_seen_at && Date.now() - new Date(n.last_seen_at).getTime() < stale;
@@ -335,11 +342,15 @@ async function loadMeta(force) {
 
 // сводка о проблемах по всем кластерам
 async function collectHealth() {
-  const [nodesByCluster, probes] = await Promise.all([
+  const [nodesByCluster, probes, exits] = await Promise.all([
     Promise.all(state.clusters.map(c => api(`/clusters/${c.id}/nodes`).then(nodes => ({ c, nodes })))),
     api("/probes"),
+    Promise.all(state.clusters.map(c => exitOf(c.id))),
   ]);
   const alerts = [];
+  for (const e of exits) {
+    if (e && e.enabled && !exitAlive(e)) alerts.push({ what: `Выход ${e.name} молчит`, why: `YouTube идёт напрямую, отчёт ${ago(e.last_seen_at)}`, href: "#/servers" });
+  }
   let alive = 0, total = 0;
   for (const { c, nodes } of nodesByCluster) {
     for (const n of nodes) {
@@ -363,7 +374,7 @@ async function collectHealth() {
   }
   const dot = document.getElementById("health");
   if (dot) dot.className = alerts.length ? "bad" : "ok";
-  return { alerts, alive, total, nodesByCluster, probes };
+  return { alerts, alive, total, nodesByCluster, probes, exits };
 }
 
 async function onlinePeers() {
@@ -770,7 +781,7 @@ async function viewServers() {
         <div class="head"><div><h1>Серверы</h1><div class="sub">${h.alive} из ${h.total} на связи</div></div>
           ${state.clusters.length ? "" : `<button class="btn" id="nc">Создать кластер</button>`}</div>
         <div id="cform"></div>
-        ${state.clusters.map((c, i) => clusterBlock(c, h.nodesByCluster[i].nodes, dnsStates[i], probeByAddr)).join("")}
+        ${state.clusters.map((c, i) => clusterBlock(c, h.nodesByCluster[i].nodes, dnsStates[i], probeByAddr, h.exits[i])).join("")}
         <section>
           <div class="sh"><h2>Пробы</h2><span class="muted" style="font-size:13px">проверяют адреса из сети пользователей</span></div>
           ${h.probes.map(p => {
@@ -787,7 +798,7 @@ async function viewServers() {
   if (nav === state.nav) state.timer = setInterval(() => { if (!document.querySelector(".form, .cmd")) draw().catch(() => {}); }, 15000);
 }
 
-function clusterBlock(c, nodes, dns, probeByAddr) {
+function clusterBlock(c, nodes, dns, probeByAddr, exit) {
   const published = new Set((dns.records || []).map(String));
   const health = { up: ["ok", "доступен"], down: ["bad", "недоступен"], unknown: ["", "не проверен"] };
   const nodeRow = n => {
@@ -836,6 +847,17 @@ function clusterBlock(c, nodes, dns, probeByAddr) {
         <div><span class="label">DNS-провайдер</span><span>${state.meta.dns_provider === "cloudflare" ? "Cloudflare, автоматически" : "вручную"}</span></div>
       </div>
       ${dns.error ? `<div class="err" style="color:var(--bad);font-size:13px;margin-bottom:12px">Ошибка DNS: ${esc(dns.error)}</div>` : ""}
+      ${exit ? `<div class="exitbox">
+        <div class="label">Выход для доменов</div>
+        <div class="row1">
+          <span><span class="dot ${!exit.enabled ? "" : exitAlive(exit) ? "ok" : "bad"}"></span> <b style="font-weight:500">${esc(exit.name)}</b> <span class="mono muted">${esc(exit.endpoint)}</span></span>
+          <span class="muted">${!exit.enabled ? "выключен, домены идут напрямую" : exitAlive(exit) ? "на связи" : "молчит, " + ago(exit.last_seen_at)}</span>
+          <span class="muted">${exit.domains.length} доменов: ${esc(exit.domains.slice(0, 3).join(", "))}${exit.domains.length > 3 ? "…" : ""}</span>
+          <button class="link" data-exit-domains="${exit.id}">Изменить домены</button>
+          <button class="link" data-exit-toggle="${exit.id}" data-on="${exit.enabled}">${exit.enabled ? "Выключить" : "Включить"}</button>
+        </div>
+        <div id="exd-${exit.id}" data-domains="${esc(exit.domains.join("\n"))}"></div>
+      </div>` : ""}
       <div id="nform-${c.id}"></div>
       ${nodes.map(nodeRow).join("") || `<div class="empty">Серверов нет</div>`}
     </section>
@@ -905,6 +927,23 @@ function bindServers() {
     await run(() => api(`/clusters/${b.dataset.cluster}/dns/publish`, { method: "POST", body: { address_id: b.dataset.publish } }), "DNS переключён, клиенты перейдут при переподключении");
     state.redrawServers();
   }));
+  main.querySelectorAll("[data-exit-toggle]").forEach(b => b.onclick = async () => {
+    await run(() => api(`/exits/${b.dataset.exitToggle}`, { method: "PATCH", body: { enabled: b.dataset.on !== "true" } }), "Готово, узлы применят за пару секунд");
+    state.redrawServers();
+  });
+  main.querySelectorAll("[data-exit-domains]").forEach(b => b.onclick = () => {
+    const box = document.getElementById("exd-" + b.dataset.exitDomains);
+    if (box.querySelector("form")) { box.innerHTML = ""; return; }
+    box.innerHTML = `<form class="form" style="margin:14px 0 0;display:block">
+      <label><span>Домены, по одному в строке, поддомены входят автоматически</span><textarea class="f" name="d">${esc(box.dataset.domains)}</textarea></label>
+      <button class="btn" style="margin-top:12px">Сохранить</button></form>`;
+    box.querySelector("form").onsubmit = async e => {
+      e.preventDefault();
+      const domains = new FormData(e.target).get("d").split(/[\s,]+/).filter(Boolean);
+      await run(() => api(`/exits/${b.dataset.exitDomains}`, { method: "PATCH", body: { domains } }), "Домены сохранены");
+      state.redrawServers();
+    };
+  });
   main.querySelectorAll("[data-deladdr]").forEach(b => confirmBtn(b, "точно?", async () => {
     await run(() => api(`/addresses/${b.dataset.deladdr}`, { method: "DELETE" }), "Адрес удалён");
     state.redrawServers();

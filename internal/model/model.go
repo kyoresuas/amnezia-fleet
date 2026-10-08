@@ -132,3 +132,31 @@ type Probe struct {
 	LastSeenAt *time.Time `json:"last_seen_at,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 }
+
+// Exit, сервер в другой стране, через который идёт трафик выбранных доменов
+type Exit struct {
+	ID         string       `json:"id"`
+	ClusterID  string       `json:"cluster_id"`
+	Name       string       `json:"name"`
+	Endpoint   netip.Addr   `json:"endpoint"`
+	ListenPort uint16       `json:"listen_port"`
+	PublicKey  awg.Key      `json:"public_key"`
+	PrivateKey awg.Key      `json:"-"`
+	Params     awg.Params   `json:"-"`
+	SubnetV4   netip.Prefix `json:"subnet_v4"`
+	DNS        string       `json:"dns"`
+	Domains    []string     `json:"domains"`
+	Enabled    bool         `json:"enabled"`
+	LastSeenAt *time.Time   `json:"last_seen_at,omitempty"`
+	LastError  string       `json:"last_error,omitempty"`
+	CreatedAt  time.Time    `json:"created_at"`
+}
+
+// ExitLink, ключ и адрес узла в туннеле до выхода
+type ExitLink struct {
+	ExitID     string
+	NodeID     string
+	PublicKey  awg.Key
+	PrivateKey awg.Key
+	Address    netip.Addr
+}

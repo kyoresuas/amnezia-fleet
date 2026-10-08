@@ -42,7 +42,7 @@ build() {
   mkdir -p "$BIN"
   (
     cd "$ROOT"
-    for cmd in fleetd fleet-agent fleet-probe; do
+    for cmd in fleetd fleet-agent fleet-probe fleet-exit; do
       CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local go build -trimpath -ldflags "-s -w" -o "$BIN/$cmd" "./cmd/$cmd"
     done
   )
@@ -50,11 +50,11 @@ build() {
 
 # api вызывает API fleetd в обход DNS, напрямую на CONTROL_HOST
 api() {
-  local path="$1"
+  local path="$1" args=""
   shift
-  curl -sS --fail-with-body --resolve "$API_DOMAIN:443:$CONTROL_HOST" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-    "https://$API_DOMAIN/api/v1$path" "$@"
+  for a in "$@"; do args+=" $(printf '%q' "$a")"; done
+  # через SSH на самом control plane, не зависит от внешнего DNS и сети до него
+  rsh "$CONTROL_HOST" "set -a; . /etc/fleetd/fleetd.env; curl -sS --fail-with-body -H \"Authorization: Bearer \$FLEET_ADMIN_TOKEN\" -H 'Content-Type: application/json' http://127.0.0.1:18080/api/v1$path$args"
 }
 
 # jq_py достаёт значение из JSON выражением Python над переменной d
@@ -291,6 +291,52 @@ systemctl is-active fleet-probe
 REMOTE
 }
 
+# deploy_exit ставит выход для доменов кластера, например YouTube через РФ
+deploy_exit() {
+  : "${EXIT_HOST:?задайте EXIT_HOST в inventory.env}"
+  log "выход на $EXIT_HOST"
+  deploy_cluster
+  rcp "$EXIT_HOST" /tmp/ "$BIN/fleet-exit"
+  if ! rsh "$EXIT_HOST" "test -f /etc/fleet-exit.env"; then
+    local token
+    token="$(api "/clusters/$CLUSTER_ID/exit" -X POST -d "{\"name\":\"${EXIT_NAME:-exit}\",\"endpoint\":\"$EXIT_HOST\"}" | jq_py "d['token']")"
+    rsh "$EXIT_HOST" "umask 077; printf 'FLEET_SERVER_URL=https://%s\nFLEET_EXIT_TOKEN=%s\n' '$API_DOMAIN' '$token' >/etc/fleet-exit.env"
+  fi
+  rsh "$EXIT_HOST" "bash -s" <<'REMOTE'
+set -euo pipefail
+install -m 0755 /tmp/fleet-exit /usr/local/bin/fleet-exit
+rm -f /tmp/fleet-exit
+cat >/etc/systemd/system/fleet-exit.service <<'UNIT'
+[Unit]
+Description=amnezia-fleet exit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=/etc/fleet-exit.env
+ExecStart=/usr/local/bin/fleet-exit
+Restart=always
+RestartSec=5
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_ADMIN
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/proc/sys/net /run
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable fleet-exit >/dev/null 2>&1
+systemctl restart fleet-exit
+sleep 3
+systemctl is-active fleet-exit
+journalctl -u fleet-exit -n 3 -o cat
+REMOTE
+}
+
 step="${1:-all}"
 case "$step" in
   control) build && deploy_control ;;
@@ -298,9 +344,10 @@ case "$step" in
   cluster) deploy_cluster ;;
   nodes) build && deploy_nodes ;;
   probe) build && deploy_probe ;;
+  exit) build && deploy_exit ;;
   all) build && deploy_control && deploy_cert && deploy_nodes && deploy_probe ;;
   *)
-    echo "шаг: all, control, cert, cluster, nodes или probe" >&2
+    echo "шаг: all, control, cert, cluster, nodes, probe или exit" >&2
     exit 1
     ;;
 esac

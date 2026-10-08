@@ -38,6 +38,8 @@ type Agent struct {
 	lastErr  string
 	dnsAddrs []netip.Addr
 
+	exitAlive bool
+	synced    bool
 	counters  map[awg.Key][2]uint64
 	baselined bool
 	pending   map[string]*agentapi.PeerUsage
@@ -80,7 +82,8 @@ func (a *Agent) stateLoop(ctx context.Context) {
 	for ctx.Err() == nil {
 		a.mu.Lock()
 		known := int64(0)
-		if a.state != nil && a.applied == a.state.Revision {
+		// сохранённое состояние могло записать старая версия агента, поэтому первый запрос всегда полный
+		if a.synced && a.state != nil && a.applied == a.state.Revision {
 			known = a.applied
 		}
 		a.mu.Unlock()
@@ -106,6 +109,9 @@ func (a *Agent) stateLoop(ctx context.Context) {
 			a.log.Warn("сохранение состояния", "err", err)
 		}
 		a.applyAndRecord(st)
+		a.mu.Lock()
+		a.synced = true
+		a.mu.Unlock()
 		if a.lastError() != "" {
 			// повтор без ожидания новой ревизии
 			select {
@@ -148,7 +154,8 @@ func (a *Agent) apply(st agentapi.DesiredState) error {
 	a.dns.SetLogging(st.Telemetry.DNSQueries)
 	if !st.Enabled {
 		a.stopDNS()
-		return errors.Join(netsetup.DeleteLink(a.cfg.Iface), netsetup.RemoveFirewall())
+		a.dns.SetExit(nil, netip.Addr{}, nil)
+		return errors.Join(teardownExit(), netsetup.DeleteLink(a.cfg.Iface), netsetup.RemoveFirewall())
 	}
 	addrs := []netip.Prefix{st.Interface.AddressV4}
 	if st.Interface.AddressV6.IsValid() {
@@ -185,7 +192,10 @@ func (a *Agent) apply(st agentapi.DesiredState) error {
 	if st.Interface.AddressV6.IsValid() {
 		gateways = append(gateways, st.Interface.AddressV6.Addr())
 	}
-	return a.ensureDNS(gateways)
+	if err := a.ensureDNS(gateways); err != nil {
+		return err
+	}
+	return a.applyExit(st.Exit, a.cfg.Iface)
 }
 
 // netlink возвращает соединение с модулем, открывая его при необходимости
@@ -321,6 +331,7 @@ func (a *Agent) reportLoop(ctx context.Context) {
 func (a *Agent) report(ctx context.Context) {
 	now := time.Now()
 	peerStats := a.sampleCounters(now)
+	a.checkExit(now)
 	a.mu.Lock()
 	rep := agentapi.Report{
 		AgentVersion:    Version,

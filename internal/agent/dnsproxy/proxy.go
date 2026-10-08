@@ -39,6 +39,54 @@ type Proxy struct {
 
 	servers []*dns.Server
 	client  *dns.Client
+
+	exitMu sync.RWMutex
+	exit   *exitRoute
+}
+
+// exitRoute, домены, которые резолвятся и ходят через выход
+type exitRoute struct {
+	domains []string
+	server  string
+	add     func([]netip.Addr) error
+	active  bool
+}
+
+// SetExit включает маршрут через выход; add добавляет IP в набор маршрутизации, nil отключает
+func (p *Proxy) SetExit(domains []string, dnsServer netip.Addr, add func([]netip.Addr) error) {
+	p.exitMu.Lock()
+	defer p.exitMu.Unlock()
+	if add == nil {
+		p.exit = nil
+		return
+	}
+	active := p.exit != nil && p.exit.active
+	p.exit = &exitRoute{domains: domains, server: netip.AddrPortFrom(dnsServer, 53).String(), add: add, active: active}
+}
+
+// SetExitActive включает и выключает использование выхода, например когда туннель упал
+func (p *Proxy) SetExitActive(on bool) {
+	p.exitMu.Lock()
+	defer p.exitMu.Unlock()
+	if p.exit != nil {
+		p.exit.active = on
+	}
+}
+
+// exitFor возвращает маршрут, если имя относится к доменам выхода и выход активен
+func (p *Proxy) exitFor(name string) *exitRoute {
+	p.exitMu.RLock()
+	defer p.exitMu.RUnlock()
+	if p.exit == nil || !p.exit.active {
+		return nil
+	}
+	name = strings.TrimSuffix(strings.ToLower(name), ".")
+	for _, d := range p.exit.domains {
+		if name == d || strings.HasSuffix(name, "."+d) {
+			return p.exit
+		}
+	}
+	return nil
 }
 
 type domainEntry struct {
@@ -114,6 +162,15 @@ func (p *Proxy) serve(w dns.ResponseWriter, req *dns.Msg) {
 		_ = w.WriteMsg(m)
 		return
 	}
+	if len(req.Question) > 0 {
+		if ex := p.exitFor(req.Question[0].Name); ex != nil {
+			if resp := p.serveExit(ex, req, w.RemoteAddr().Network()); resp != nil {
+				_ = w.WriteMsg(resp)
+				p.record(src, peerID, req, resp, dns.RcodeToString[resp.Rcode])
+				return
+			}
+		}
+	}
 	resp, err := p.forward(req, w.RemoteAddr().Network())
 	if err != nil {
 		m := new(dns.Msg)
@@ -124,6 +181,41 @@ func (p *Proxy) serve(w dns.ResponseWriter, req *dns.Msg) {
 	}
 	_ = w.WriteMsg(resp)
 	p.record(src, peerID, req, resp, dns.RcodeToString[resp.Rcode])
+}
+
+// serveExit резолвит через DNS выхода и добавляет адреса в маршрут, nil если выход не ответил
+func (p *Proxy) serveExit(ex *exitRoute, req *dns.Msg, network string) *dns.Msg {
+	// IPv6 через выход не маршрутизируется, пусть клиент идёт по IPv4
+	if req.Question[0].Qtype == dns.TypeAAAA {
+		m := new(dns.Msg)
+		m.SetReply(req)
+		return m
+	}
+	c := *p.client
+	c.Net = "udp"
+	if strings.HasPrefix(network, "tcp") {
+		c.Net = "tcp"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), upstreamTimeout)
+	defer cancel()
+	resp, _, err := c.ExchangeContext(ctx, req, ex.server)
+	if err != nil {
+		return nil
+	}
+	var ips []netip.Addr
+	for _, rr := range resp.Answer {
+		if a, ok := rr.(*dns.A); ok {
+			if ip, ok := netip.AddrFromSlice(a.A); ok {
+				ips = append(ips, ip.Unmap())
+			}
+		}
+	}
+	if len(ips) > 0 {
+		if err := ex.add(ips); err != nil {
+			return nil
+		}
+	}
+	return resp
 }
 
 // forward пробует вышестоящие резолверы по очереди

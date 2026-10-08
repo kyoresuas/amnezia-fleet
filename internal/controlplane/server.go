@@ -51,6 +51,10 @@ func (s *Server) Handler() http.Handler {
 	admin.HandleFunc("POST /api/v1/clusters/{id}/dns/sync", s.syncClusterDNS)
 	admin.HandleFunc("POST /api/v1/clusters/{id}/dns/publish", s.publishAddress)
 	admin.HandleFunc("GET /api/v1/clusters/{id}/online", s.clusterOnline)
+	admin.HandleFunc("GET /api/v1/clusters/{id}/exit", s.getExit)
+	admin.HandleFunc("POST /api/v1/clusters/{id}/exit", s.createExit)
+	admin.HandleFunc("PATCH /api/v1/exits/{id}", s.updateExit)
+	admin.HandleFunc("DELETE /api/v1/exits/{id}", s.deleteExit)
 
 	admin.HandleFunc("GET /api/v1/clusters/{id}/nodes", s.listNodes)
 	admin.HandleFunc("POST /api/v1/clusters/{id}/nodes", s.createNode)
@@ -105,6 +109,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /dist/{name}", s.distFile)
 	mux.HandleFunc("GET /agent/v1/state", s.agentState)
 	mux.HandleFunc("POST /agent/v1/report", s.agentReport)
+	mux.HandleFunc("GET /exit/v1/state", s.exitState)
 	mux.HandleFunc("GET /probe/v1/targets", s.probeTargets)
 	mux.HandleFunc("POST /probe/v1/results", s.probeResults)
 

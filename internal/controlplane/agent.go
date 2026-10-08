@@ -2,6 +2,8 @@ package controlplane
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/netip"
 	"strconv"
@@ -65,7 +67,38 @@ func (s *Server) buildDesiredState(ctx context.Context, n model.Node) (agentapi.
 		// без AllowedIPs: только рукопожатие
 		st.Peers = append(st.Peers, agentapi.PeerSpec{ID: probePeerPrefix + pr.ID, PublicKey: pr.PublicKey})
 	}
+	if st.Exit, err = s.exitSpec(ctx, c.ID, n.ID); err != nil {
+		return agentapi.DesiredState{}, err
+	}
 	return st, nil
+}
+
+// exitSpec описывает подключение узла к выходу кластера, если он есть и включён
+func (s *Server) exitSpec(ctx context.Context, clusterID, nodeID string) (*agentapi.ExitSpec, error) {
+	e, err := s.store.GetExitByCluster(ctx, clusterID)
+	if errors.Is(err, store.ErrNotFound) || (err == nil && !e.Enabled) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	link, err := s.store.EnsureExitLink(ctx, e.ID, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	dns, err := netip.ParseAddr(e.DNS)
+	if err != nil {
+		return nil, fmt.Errorf("DNS выхода: %w", err)
+	}
+	return &agentapi.ExitSpec{
+		Endpoint:        netip.AddrPortFrom(e.Endpoint, e.ListenPort),
+		ServerPublicKey: e.PublicKey,
+		PrivateKey:      link.PrivateKey,
+		Address:         link.Address,
+		Params:          e.Params,
+		Domains:         e.Domains,
+		DNS:             dns,
+	}, nil
 }
 
 // agentState отдаёт желаемое состояние

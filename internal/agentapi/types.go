@@ -13,6 +13,7 @@ const (
 	PathReport       = "/agent/v1/report"
 	PathProbeTargets = "/probe/v1/targets"
 	PathProbeResults = "/probe/v1/results"
+	PathExitState    = "/exit/v1/state"
 )
 
 // HeaderKnownRevision включает long-poll
@@ -26,6 +27,34 @@ type DesiredState struct {
 	Interface InterfaceSpec  `json:"interface"`
 	Peers     []PeerSpec     `json:"peers"`
 	Telemetry TelemetryFlags `json:"telemetry"`
+	// Exit, если задан, трафик к доменам из списка идёт через сервер в другой стране
+	Exit *ExitSpec `json:"exit,omitempty"`
+}
+
+// ExitSpec, подключение узла к выходу
+type ExitSpec struct {
+	Endpoint        netip.AddrPort `json:"endpoint"`
+	ServerPublicKey awg.Key        `json:"server_public_key"`
+	PrivateKey      awg.Key        `json:"private_key"`
+	Address         netip.Addr     `json:"address"`
+	Params          awg.Params     `json:"params"`
+	Domains         []string       `json:"domains"`
+	DNS             netip.Addr     `json:"dns"`
+}
+
+// ExitState, конфигурация самого выхода
+type ExitState struct {
+	PrivateKey awg.Key      `json:"private_key"`
+	ListenPort uint16       `json:"listen_port"`
+	Address    netip.Prefix `json:"address"`
+	Params     awg.Params   `json:"params"`
+	Peers      []ExitPeer   `json:"peers"`
+}
+
+// ExitPeer, узел кластера, который пускает трафик через выход
+type ExitPeer struct {
+	PublicKey awg.Key    `json:"public_key"`
+	Address   netip.Addr `json:"address"`
 }
 
 type InterfaceSpec struct {

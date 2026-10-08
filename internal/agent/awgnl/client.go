@@ -54,6 +54,7 @@ const (
 	devAMaxHandshakeAttempts   = 32
 	devARandomTrailers         = 33
 	devADisableCookies         = 34
+	devAI1                     = 21
 
 	peerFRemoveMe          = 1 << 0
 	peerFReplaceAllowedIPs = 1 << 1
@@ -62,6 +63,7 @@ const (
 	peerAPresharedKey  = 2
 	peerAFlags         = 3
 	peerAEndpoint      = 4
+	peerAKeepalive     = 5
 	peerALastHandshake = 6
 	peerARxBytes       = 7
 	peerATxBytes       = 8
@@ -208,6 +210,8 @@ func parseDevice(d *Device, b []byte) error {
 			d.Params.RandomTrailers = ad.Uint8() != 0
 		case devADisableCookies:
 			d.Params.DisableCookies = ad.Uint8() != 0
+		case devAI1:
+			d.Params.I1 = ad.String()
 		case devAPeers:
 			ad.Nested(func(nad *netlink.AttributeDecoder) error {
 				for nad.Next() {
@@ -302,7 +306,9 @@ type Config struct {
 	ListenPort   *uint16
 	Params       *awg.Params
 	ReplacePeers bool
-	Peers        []PeerConfig
+	// Signatures передаёт I1-I5, нужны только стороне, которая начинает рукопожатие
+	Signatures bool
+	Peers      []PeerConfig
 }
 
 type PeerConfig struct {
@@ -311,6 +317,8 @@ type PeerConfig struct {
 	Remove            bool
 	ReplaceAllowedIPs bool
 	AllowedIPs        []netip.Prefix
+	Endpoint          netip.AddrPort
+	Keepalive         awg.Range16
 }
 
 // Configure применяет изменения
@@ -386,6 +394,13 @@ func encodeDevice(ae *netlink.AttributeEncoder, cfg Config) {
 		ae.Uint32(devAMaxHandshakeAttempts, p.MaxHandshakeAttempts.Netlink())
 		ae.Uint8(devARandomTrailers, boolU8(p.RandomTrailers))
 		ae.Uint8(devADisableCookies, boolU8(p.DisableCookies))
+		if cfg.Signatures {
+			for i, sig := range []string{p.I1, p.I2, p.I3, p.I4, p.I5} {
+				if sig != "" {
+					ae.String(uint16(devAI1+i), sig)
+				}
+			}
+		}
 	}
 	if cfg.ReplacePeers {
 		ae.Uint32(devAFlags, deviceFReplacePeers)
@@ -410,6 +425,12 @@ func encodePeer(ae *netlink.AttributeEncoder, p PeerConfig) {
 	if p.PresharedKey != nil {
 		ae.Bytes(peerAPresharedKey, p.PresharedKey[:])
 	}
+	if p.Endpoint.IsValid() {
+		ae.Bytes(peerAEndpoint, sockaddr(p.Endpoint))
+	}
+	if !p.Keepalive.IsZero() {
+		ae.Uint32(peerAKeepalive, p.Keepalive.Netlink())
+	}
 	if len(p.AllowedIPs) > 0 {
 		ae.Nested(peerAAllowedIPs, func(nae *netlink.AttributeEncoder) error {
 			for i, pfx := range p.AllowedIPs {
@@ -431,6 +452,25 @@ func encodePeer(ae *netlink.AttributeEncoder, p PeerConfig) {
 			return nil
 		})
 	}
+}
+
+// sockaddr кодирует адрес в sockaddr_in или sockaddr_in6, порт в сетевом порядке байт
+func sockaddr(ap netip.AddrPort) []byte {
+	addr := ap.Addr().Unmap()
+	if addr.Is4() {
+		b := make([]byte, 16)
+		binary.NativeEndian.PutUint16(b[0:2], afInet)
+		binary.BigEndian.PutUint16(b[2:4], ap.Port())
+		a4 := addr.As4()
+		copy(b[4:8], a4[:])
+		return b
+	}
+	b := make([]byte, 28)
+	binary.NativeEndian.PutUint16(b[0:2], afInet6)
+	binary.BigEndian.PutUint16(b[2:4], ap.Port())
+	a16 := addr.As16()
+	copy(b[8:24], a16[:])
+	return b
 }
 
 // boolU8 переводит bool в u8 атрибут
