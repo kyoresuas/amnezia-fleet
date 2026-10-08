@@ -130,6 +130,10 @@ type FirewallSpec struct {
 	Iface    string
 	SubnetV4 netip.Prefix
 	SubnetV6 netip.Prefix
+	// Gateway, адрес резолвера агента, сюда заворачивается весь DNS клиентов
+	Gateway netip.Addr
+	// BlockDoH отклоняет публичные DoH, чтобы браузеры откатились на DNS узла
+	BlockDoH bool
 }
 
 const tableName = "amnezia_fleet"
@@ -148,11 +152,27 @@ table inet {{.Table}} {
 		flags interval
 		elements = { ::1/128, fc00::/7, fe80::/10, ff00::/8 }
 	}
+	set doh4 {
+		type ipv4_addr
+		elements = { 1.1.1.1, 1.0.0.1, 1.1.1.2, 1.0.0.2, 1.1.1.3, 1.0.0.3, 8.8.8.8, 8.8.4.4, 9.9.9.9, 149.112.112.112, 9.9.9.11, 149.112.112.11, 94.140.14.14, 94.140.15.15, 94.140.14.140, 94.140.14.141, 208.67.222.222, 208.67.220.220, 76.76.2.0, 76.76.10.0, 194.242.2.2, 185.228.168.9, 185.228.169.9 }
+	}
+{{- if .Gateway.IsValid}}
+	chain dns {
+		type nat hook prerouting priority dstnat; policy accept;
+		iifname "{{.Iface}}" ip daddr != {{.Gateway}} udp dport 53 dnat ip to {{.Gateway}}
+		iifname "{{.Iface}}" ip daddr != {{.Gateway}} tcp dport 53 dnat ip to {{.Gateway}}
+	}
+{{- end}}
 	chain forward {
 		type filter hook forward priority filter - 10; policy accept;
 		iifname "{{.Iface}}" tcp flags syn tcp option maxseg size set rt mtu
 		oifname "{{.Iface}}" tcp flags syn tcp option maxseg size set rt mtu
 		iifname "{{.Iface}}" oifname "{{.Iface}}" drop
+		iifname "{{.Iface}}" tcp dport 853 reject with tcp reset
+{{- if .BlockDoH}}
+		iifname "{{.Iface}}" ip daddr @doh4 tcp dport 443 reject with tcp reset
+		iifname "{{.Iface}}" ip daddr @doh4 udp dport 443 reject
+{{- end}}
 		iifname "{{.Iface}}" ip daddr @private4 drop
 		iifname "{{.Iface}}" ip6 daddr @private6 drop
 	}

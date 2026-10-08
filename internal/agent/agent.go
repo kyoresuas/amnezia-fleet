@@ -166,6 +166,7 @@ func (a *Agent) apply(st agentapi.DesiredState) error {
 	}
 	if err := netsetup.ApplyFirewall(netsetup.FirewallSpec{
 		Iface: a.cfg.Iface, SubnetV4: st.Interface.AddressV4.Masked(), SubnetV6: st.Interface.AddressV6.Masked(),
+		Gateway: st.Interface.AddressV4.Addr(), BlockDoH: st.Exit != nil,
 	}); err != nil {
 		return err
 	}
